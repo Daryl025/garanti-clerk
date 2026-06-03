@@ -4,6 +4,9 @@ import {
   TextInput, ActivityIndicator, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+const API = 'https://sweet-patience-production.up.railway.app';
 import LangToggle from '../../components/LangToggle';
 
 export default function ClerkLogin({ navigation }) {
@@ -16,17 +19,18 @@ export default function ClerkLogin({ navigation }) {
     if (!phone || !pin) { setError('Enter your phone and PIN'); return; }
     setLoading(true);
     setError('');
-    setTimeout(async () => {
-      if (pin === '1234') {
-        await AsyncStorage.setItem('clerk_token', 'mock_token');
-        await AsyncStorage.setItem('clerk_name', 'Nkeng Astride');
-        await AsyncStorage.setItem('clerk_terminal', 'Douala Akwa');
-        navigation.replace('ClerkHome');
-      } else {
-        setError('Invalid phone or PIN');
-        setLoading(false);
-      }
-    }, 1000);
+    try {
+      const res = await axios.post(`${API}/api/auth/agent/login`, { phone, pin });
+      const { token, agent } = res.data;
+      await AsyncStorage.setItem('clerk_token', token);
+      await AsyncStorage.setItem('clerk_name', agent.name);
+      await AsyncStorage.setItem('clerk_terminal', agent.terminal_name);
+      await AsyncStorage.setItem('clerk_terminal_code', agent.terminal_id);
+      navigation.replace('ClerkHome');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Invalid phone or PIN');
+      setLoading(false);
+    }
   }
 
   return (

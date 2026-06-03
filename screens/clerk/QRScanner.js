@@ -1,33 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, TextInput, Animated
+  ScrollView, TextInput, ActivityIndicator, Alert
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import LangToggle from '../../components/LangToggle';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const MOCK_TICKETS = [
-  {
-    ref: 'GE-4820', status: 'valid',
-    passenger: 'Ngo Sandrine', phone: '677234567',
-    from: 'Douala Akwa', to: 'Yaoundé Nsam',
-    seat: '8C', bus: 'GE-211', date: '2026-05-31', time: '10:30',
-    ticket_type: 'online', scanned_at: null,
-  },
-  {
-    ref: 'GE-4791', status: 'expired',
-    passenger: 'Kamdem Roger', phone: '699112233',
-    from: 'Douala Akwa', to: 'Yaoundé Nsam',
-    seat: '3B', bus: 'GE-104', date: '2026-05-26', time: '07:00',
-    ticket_type: 'online', scanned_at: null,
-  },
-  {
-    ref: 'GE-4801', status: 'already_used',
-    passenger: 'Fotso Jules', phone: '655998877',
-    from: 'Douala Akwa', to: 'Yaoundé Nsam',
-    seat: '6A', bus: 'GE-104', date: '2026-05-31', time: '06:00',
-    ticket_type: 'walk-in', scanned_at: '2026-05-31T08:12:00', scanned_by: 'Clerk Nkeng',
-  },
-];
+const API = 'https://sweet-patience-production.up.railway.app';
 
 const STATE_CONFIG = {
   valid:        { bg: '#3DB34A', icon: '✓', label: 'Valid ticket',      sub: 'Passenger may board' },
@@ -37,28 +18,74 @@ const STATE_CONFIG = {
 };
 
 export default function QRScanner({ navigation }) {
-  const [result, setResult]     = useState(null);
-  const [manualRef, setManualRef] = useState('');
-  const [scanLog] = useState({ valid: 41, expired: 3, already_used: 2, not_found: 1 });
+  const [result, setResult]         = useState(null);
+  const [manualRef, setManualRef]   = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [scanning, setScanning]     = useState(false);
+  const [scanned, setScanned]       = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanLog, setScanLog]       = useState({ valid: 0, expired: 0, already_used: 0, not_found: 0 });
 
-  function simulateScan(status) {
-    const ticket = MOCK_TICKETS.find(t => t.status === status) || null;
-    setResult({ status, ticket });
+  async function validateTicket(ref) {
+    if (!ref.trim()) return;
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('clerk_token');
+      const res = await axios.post(`${API}/api/tickets/validate`, {
+        qr_payload: ref.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const { status, ticket } = res.data;
+      setResult({ status, ticket });
+      setScanLog(prev => ({ ...prev, [status]: (prev[status] || 0) + 1 }));
+    } catch (err) {
+      const status = err.response?.data?.status || 'not_found';
+      const ticket = err.response?.data?.ticket || null;
+      setResult({ status, ticket });
+      setScanLog(prev => ({ ...prev, [status]: (prev[status] || 0) + 1 }));
+    } finally {
+      setLoading(false);
+      setScanning(false);
+      setManualRef('');
+    }
   }
 
-  function lookupManual() {
-    if (!manualRef.trim()) return;
-    const ticket = MOCK_TICKETS.find(t => t.ref.toLowerCase() === manualRef.trim().toLowerCase());
-    if (ticket) setResult({ status: ticket.status, ticket });
-    else setResult({ status: 'not_found', ticket: null });
-    setManualRef('');
+  async function startCamera() {
+    if (!permission?.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Alert.alert('Camera permission needed', 'Please allow camera access to scan QR codes.');
+        return;
+      }
+    }
+    setScanning(true);
+    setScanned(false);
+  }
+
+  function onBarcodeScanned({ data }) {
+    if (scanned) return;
+    setScanned(true);
+    setScanning(false);
+    validateTicket(data);
+  }
+
+  function simulateScan(status) {
+    const MOCK = {
+      valid:        { ticket_ref: 'GE-1001', passenger_name: 'Ngo Sandrine',  seat_numbers: ['8C'], depart_time: '06:00', trip_date: new Date().toISOString().split('T')[0] },
+      expired:      { ticket_ref: 'GE-0999', passenger_name: 'Kamdem Roger',  seat_numbers: ['3B'], depart_time: '07:00', trip_date: '2026-05-26' },
+      already_used: { ticket_ref: 'GE-1000', passenger_name: 'Fotso Jules',   seat_numbers: ['6A'], depart_time: '06:00', trip_date: new Date().toISOString().split('T')[0] },
+      not_found:    null,
+    };
+    setResult({ status, ticket: MOCK[status] });
+    setScanLog(prev => ({ ...prev, [status]: (prev[status] || 0) + 1 }));
   }
 
   function flagTicket() {
     navigation.navigate('FlaggedList', {
       newFlag: {
-        ref: result?.ticket?.ref || manualRef,
-        passenger: result?.ticket?.passenger || 'Unknown',
+        ref: result?.ticket?.ticket_ref || manualRef,
+        passenger: result?.ticket?.passenger_name || 'Unknown',
         reason: result?.status,
         time: new Date().toLocaleTimeString(),
       }
@@ -66,14 +93,14 @@ export default function QRScanner({ navigation }) {
     setResult(null);
   }
 
-  function reset() { setResult(null); setManualRef(''); }
+  function reset() { setResult(null); setManualRef(''); setScanned(false); }
 
   const cfg = result ? STATE_CONFIG[result.status] : null;
 
   return (
     <SafeAreaView style={s.shell}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => { setScanning(false); navigation.goBack(); }}>
           <Text style={s.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={s.title}>Scan QR Ticket</Text>
@@ -82,17 +109,24 @@ export default function QRScanner({ navigation }) {
 
       <ScrollView style={s.body} contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
 
-        {/* Viewport */}
+        {/* Camera or viewport */}
         <View style={s.viewport}>
-          <View style={[s.corner, s.cTL]} />
-          <View style={[s.corner, s.cTR]} />
-          <View style={[s.corner, s.cBL]} />
-          <View style={[s.corner, s.cBR]} />
-
-          {!result ? (
+          {scanning ? (
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
+            />
+          ) : loading ? (
             <View style={s.vpIdle}>
-              <Text style={s.vpIcon}>⬛</Text>
-              <Text style={s.vpHint}>Point camera at passenger QR code</Text>
+              <ActivityIndicator color="#3DB34A" size="large" />
+              <Text style={s.vpHint}>Validating ticket...</Text>
+            </View>
+          ) : !result ? (
+            <View style={s.vpIdle}>
+              <Text style={s.vpIcon}>📷</Text>
+              <Text style={s.vpHint}>Tap "Open Camera" to scan a QR code</Text>
             </View>
           ) : (
             <View style={[s.vpResult, { backgroundColor: cfg.bg + 'EE' }]}>
@@ -101,10 +135,30 @@ export default function QRScanner({ navigation }) {
               <Text style={s.vpResultSub}>{cfg.sub}</Text>
             </View>
           )}
+
+          {/* Corner markers */}
+          <View style={[s.corner, s.cTL]} />
+          <View style={[s.corner, s.cTR]} />
+          <View style={[s.corner, s.cBL]} />
+          <View style={[s.corner, s.cBR]} />
         </View>
 
+        {/* Camera button */}
+        {!result && !loading && !scanning && (
+          <TouchableOpacity style={s.cameraBtn} onPress={startCamera} activeOpacity={0.85}>
+            <Text style={s.cameraBtnText}>📷 Open Camera to Scan</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Cancel scanning */}
+        {scanning && (
+          <TouchableOpacity style={[s.cameraBtn, { backgroundColor: '#E24B4A' }]} onPress={() => setScanning(false)}>
+            <Text style={s.cameraBtnText}>✕ Cancel Scan</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Test buttons */}
-        {!result && (
+        {!result && !loading && !scanning && (
           <View style={s.testRow}>
             <Text style={s.testLabel}>Test:</Text>
             {['valid','expired','already_used','not_found'].map(status => (
@@ -120,31 +174,30 @@ export default function QRScanner({ navigation }) {
         )}
 
         {/* Manual lookup */}
-        {!result && (
+        {!result && !loading && !scanning && (
           <>
             <View style={s.hintBar}>
-              <Text style={s.hintText}>💡 Works in direct sunlight. Keep QR well-lit.</Text>
+              <Text style={s.hintText}>💡 Or enter ticket ref manually to validate</Text>
             </View>
             <View>
-              <Text style={s.manualLabel}>OR ENTER REF MANUALLY</Text>
+              <Text style={s.manualLabel}>ENTER TICKET REF</Text>
               <View style={s.manualRow}>
                 <TextInput
                   style={s.manualInput}
-                  placeholder="e.g. GE-4820"
+                  placeholder="e.g. GE-1001"
                   placeholderTextColor="#ADADAA"
                   value={manualRef}
                   onChangeText={setManualRef}
-                  onSubmitEditing={lookupManual}
+                  onSubmitEditing={() => validateTicket(manualRef)}
                   returnKeyType="search"
                   autoCapitalize="characters"
                 />
-                <TouchableOpacity style={s.manualBtn} onPress={lookupManual}>
+                <TouchableOpacity style={s.manualBtn} onPress={() => validateTicket(manualRef)}>
                   <Text style={s.manualBtnText}>Search</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Scan log */}
             <View style={s.logBox}>
               <Text style={s.logTitle}>TODAY'S SCAN LOG</Text>
               {Object.entries(scanLog).map(([k, v]) => (
@@ -163,26 +216,21 @@ export default function QRScanner({ navigation }) {
         {result && (
           <View style={s.resultCard}>
             <View style={[s.resultHeader, { backgroundColor: cfg.bg }]}>
-              <Text style={s.resultName}>{result.ticket?.passenger || 'Unknown'}</Text>
-              <Text style={s.resultRef}>{result.ticket ? `Ref ${result.ticket.ref}` : 'No record found'}</Text>
+              <Text style={s.resultName}>{result.ticket?.passenger_name || 'Unknown'}</Text>
+              <Text style={s.resultRef}>{result.ticket ? `Ref ${result.ticket.ticket_ref}` : 'No record found'}</Text>
             </View>
             <View style={s.resultBody}>
               {result.ticket && (
                 <>
-                  <ResultRow label="Route"     value={`${result.ticket.from} → ${result.ticket.to}`} />
-                  <ResultRow label="Seat"      value={result.ticket.seat} highlight={result.status === 'valid'} />
-                  <ResultRow label="Departure" value={`${result.ticket.time} · ${result.ticket.date}`} />
-                  <ResultRow label="Type"      value={result.ticket.ticket_type} />
-                  {result.status === 'expired' && (
-                    <ResultRow label="Trip date" value={`${result.ticket.date} · EXPIRED`} danger />
-                  )}
+                  <ResultRow label="Seat"      value={result.ticket.seat_numbers?.join(', ')} highlight={result.status === 'valid'} />
+                  <ResultRow label="Departure" value={`${result.ticket.depart_time?.slice(0,5)} · ${result.ticket.trip_date?.split('T')[0]}`} />
                   {result.status === 'already_used' && (
-                    <ResultRow label="First scan" value={result.ticket.scanned_by || 'Unknown'} warn />
+                    <ResultRow label="Scanned at" value={result.ticket.scanned_at ? new Date(result.ticket.scanned_at).toLocaleTimeString() : 'Unknown'} warn />
                   )}
                 </>
               )}
               {result.status === 'not_found' && (
-                <ResultRow label="Signature" value="Failed ✗" danger />
+                <ResultRow label="Status" value="Not in system ✗" danger />
               )}
             </View>
           </View>
@@ -211,10 +259,9 @@ export default function QRScanner({ navigation }) {
                 <Text style={s.btnText}>✕ Refuse</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.ghostBtn, { flex: 1 }]} onPress={flagTicket}>
-                <Text style={s.ghostBtnText}>�� Flag</Text>
+                <Text style={s.ghostBtnText}>🚩 Flag</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={s.ghostBtn} onPress={reset}><Text style={s.ghostBtnText}>📷 Scan next</Text></TouchableOpacity>
           </>
         )}
 
@@ -271,19 +318,21 @@ const s = StyleSheet.create({
   backText:       { fontSize: 14, color: '#3DB34A', fontWeight: '500' },
   title:          { fontSize: 16, fontWeight: '600', color: '#111110' },
   body:           { flex: 1, padding: 12 },
-  viewport:       { backgroundColor: '#0a0a0a', borderRadius: 16, height: 180, position: 'relative', overflow: 'hidden' },
+  viewport:       { backgroundColor: '#0a0a0a', borderRadius: 16, height: 220, position: 'relative', overflow: 'hidden' },
   corner:         { position: 'absolute', width: 28, height: 28, borderColor: '#3DB34A', borderStyle: 'solid', borderWidth: 0 },
   cTL:            { top: 12, left: 12, borderTopWidth: 3, borderLeftWidth: 3, borderRadius: 4 },
   cTR:            { top: 12, right: 12, borderTopWidth: 3, borderRightWidth: 3, borderRadius: 4 },
   cBL:            { bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3, borderRadius: 4 },
   cBR:            { bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3, borderRadius: 4 },
   vpIdle:         { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  vpIcon:         { fontSize: 32, opacity: 0.3 },
+  vpIcon:         { fontSize: 32, opacity: 0.5 },
   vpHint:         { fontSize: 12, color: '#555', textAlign: 'center' },
   vpResult:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 6 },
   vpResultIcon:   { fontSize: 32, color: '#fff' },
   vpResultLabel:  { fontSize: 16, fontWeight: '600', color: '#fff' },
   vpResultSub:    { fontSize: 12, color: 'rgba(255,255,255,0.75)' },
+  cameraBtn:      { backgroundColor: '#111110', borderRadius: 12, padding: 14, alignItems: 'center' },
+  cameraBtnText:  { color: '#fff', fontSize: 14, fontWeight: '600' },
   testRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F7F7F5', borderRadius: 10, padding: 8 },
   testLabel:      { fontSize: 11, color: '#ADADAA' },
   testBtn:        { flex: 1, padding: 8, borderRadius: 8, alignItems: 'center' },
