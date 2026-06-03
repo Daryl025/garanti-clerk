@@ -24,21 +24,41 @@ export default function QRScanner({ navigation }) {
   const [scanning, setScanning]     = useState(false);
   const [scanned, setScanned]       = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanLog, setScanLog]       = useState({ valid: 0, expired: 0, already_used: 0, not_found: 0 });
+  const [scanLog, setScanLog] = useState({ valid: 0, expired: 0, already_used: 0, not_found: 0, date: new Date().toDateString() });
+
+  useEffect(() => {
+    AsyncStorage.getItem('clerk_scan_log').then(data => {
+      if (data) {
+        const saved = JSON.parse(data);
+        if (saved.date === new Date().toDateString()) {
+          setScanLog(saved);
+        } else {
+          const fresh = { valid: 0, expired: 0, already_used: 0, not_found: 0, date: new Date().toDateString() };
+          AsyncStorage.setItem('clerk_scan_log', JSON.stringify(fresh));
+          setScanLog(fresh);
+        }
+      }
+    });
+  }, []);
 
   async function validateTicket(ref) {
     if (!ref.trim()) return;
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('clerk_token');
-      const res = await axios.post(`${API}/api/tickets/validate`, {
-        qr_payload: ref.trim(),
-      }, {
+      const payload = ref.trim()
+      const isQRPayload = payload.includes('|')
+      const body = isQRPayload ? { qr_payload: payload } : { ticket_ref: payload }
+      const res = await axios.post(`${API}/api/tickets/validate`, body, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const { status, ticket } = res.data;
       setResult({ status, ticket });
-      setScanLog(prev => ({ ...prev, [status]: (prev[status] || 0) + 1 }));
+      setScanLog(prev => {
+        const updated = { ...prev, [status]: (prev[status] || 0) + 1 };
+        AsyncStorage.setItem('clerk_scan_log', JSON.stringify(updated));
+        return updated;
+      });
     } catch (err) {
       const status = err.response?.data?.status || 'not_found';
       const ticket = err.response?.data?.ticket || null;
@@ -222,7 +242,7 @@ export default function QRScanner({ navigation }) {
             <View style={s.resultBody}>
               {result.ticket && (
                 <>
-                  <ResultRow label="Seat"      value={result.ticket.seat_numbers?.join(', ')} highlight={result.status === 'valid'} />
+                  <ResultRow label="Seat"      value={result.ticket.seat_numbers?.join(', ') || result.ticket.seat_number} highlight={result.status === 'valid'} />
                   <ResultRow label="Departure" value={`${result.ticket.depart_time?.slice(0,5)} · ${result.ticket.trip_date?.split('T')[0]}`} />
                   {result.status === 'already_used' && (
                     <ResultRow label="Scanned at" value={result.ticket.scanned_at ? new Date(result.ticket.scanned_at).toLocaleTimeString() : 'Unknown'} warn />
