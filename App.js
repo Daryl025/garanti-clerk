@@ -12,6 +12,7 @@ import ClerkHome     from './screens/clerk/ClerkHome';
 import WalkIn        from './screens/clerk/WalkIn';
 import QRScanner     from './screens/clerk/QRScanner';
 import FlaggedList   from './screens/clerk/FlaggedList';
+import SeatMapView   from './screens/clerk/SeatMapView';
 
 const Stack = createNativeStackNavigator();
 

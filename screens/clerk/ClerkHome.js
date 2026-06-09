@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Modal, FlatList } from 'react-native';
 import LangToggle from '../../components/LangToggle';
 
 const ACTIONS = [
   { icon: '👤', label: 'Register Walk-in', sub: 'New passenger', screen: 'WalkIn', color: '#EAF3DE', iconColor: '#27500A' },
   { icon: '📷', label: 'Scan Ticket',      sub: 'Online bookings', screen: 'QRScanner', color: '#E6F1FB', iconColor: '#0C447C' },
-  { icon: '🚌', label: 'Manifest',         sub: 'Trip passenger list', screen: 'ClerkHome', color: '#FAEEDA', iconColor: '#633806' },
+  { icon: '🪑', label: 'Plan des sièges',  sub: 'Grille en temps réel', screen: 'SeatMapView', color: '#EDE8FB', iconColor: '#3D1F8A' },
   { icon: '⚠️',  label: 'Flagged Tickets', sub: 'Issues today', screen: 'FlaggedList', color: '#FCEBEB', iconColor: '#791F1F' },
+];
+
+const TODAY_TRIPS = [
+  { id: '501afc2a-91eb-4136-a92d-e96da16242c9', bus_code: 'GE-101', depart_time: '06:00:00', arrive_time: '09:30:00' },
+  { id: 'd94859c6-c214-4d78-a775-0c0bdc3a9c7b', bus_code: 'GE-102', depart_time: '13:00:00', arrive_time: '16:30:00' },
 ];
 
 const RECENT = [
@@ -20,6 +26,7 @@ const RECENT = [
 export default function ClerkHome({ navigation }) {
   const [clerkName, setClerkName]       = useState('');
   const [clerkTerminal, setClerkTerminal] = useState('');
+  const [tripPickerVisible, setTripPickerVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('clerk_name').then(n => setClerkName(n || 'Agent'));
@@ -65,7 +72,7 @@ export default function ClerkHome({ navigation }) {
         {/* Action grid */}
         <View style={s.grid}>
           {ACTIONS.map(a => (
-            <TouchableOpacity key={a.label} style={s.actionCard} onPress={() => navigation.navigate(a.screen)} activeOpacity={0.85}>
+            <TouchableOpacity key={a.label} style={s.actionCard} onPress={() => a.screen === 'SeatMapView' ? setTripPickerVisible(true) : navigation.navigate(a.screen)} activeOpacity={0.85}>
               <View style={[s.actionIcon, { backgroundColor: a.color }]}>
                 <Text style={{ fontSize: 22 }}>{a.icon}</Text>
               </View>
@@ -100,6 +107,31 @@ export default function ClerkHome({ navigation }) {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+        {/* Trip picker for seat map */}
+        <Modal transparent visible={tripPickerVisible} animationType="slide" onRequestClose={() => setTripPickerVisible(false)}>
+          <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setTripPickerVisible(false)}>
+            <View style={s.pickerSheet}>
+              <Text style={s.pickerTitle}>Choisir un voyage</Text>
+              {TODAY_TRIPS.map(trip => (
+                <TouchableOpacity
+                  key={trip.id}
+                  style={s.pickerRow}
+                  onPress={() => { setTripPickerVisible(false); navigation.navigate('SeatMapView', { trip   pickerOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerSheet:    { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
+  pickerTitle:    { fontSize: 15, fontWeight: '600', color: '#111110', marginBottom: 16, textAlign: 'center' },
+  pickerRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
+  pickerBus:      { fontSize: 15, fontWeight: '600', color: '#111110' },
+  pickerTime:     { fontSize: 13, color: '#737370' },
+}); }}
+                >
+                  <Text style={s.pickerBus}>{trip.bus_code}</Text>
+                  <Text style={s.pickerTime}>{trip.depart_time.slice(0,5)} → {trip.arrive_time.slice(0,5)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
     </SafeAreaView>
   );
 }
