@@ -50,6 +50,7 @@ export default function QRScanner({ navigation }) {
       const isQRPayload = payload.includes('|')
       const body = isQRPayload ? { qr_payload: payload } : { ticket_ref: payload }
       const res = await axios.post(`${API}/api/tickets/validate`, body, {
+        timeout: 15000,
         headers: { Authorization: `Bearer ${token}` }
       });
       const { status, ticket } = res.data;

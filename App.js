@@ -1,3 +1,4 @@
+import OfflineBanner from './components/OfflineBanner';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -36,6 +37,8 @@ export default function App() {
   }
 
   return (
+    <>
+    <OfflineBanner />
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
         <Stack.Screen name="Language"    component={LanguagePicker} />
@@ -46,5 +49,6 @@ export default function App() {
             <Stack.Screen name="FlaggedList" component={FlaggedList} />
       </Stack.Navigator>
     </NavigationContainer>
+    </>
   );
 }

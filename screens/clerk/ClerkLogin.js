@@ -20,7 +20,7 @@ export default function ClerkLogin({ navigation }) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post(`${API}/api/auth/agent/login`, { phone, pin });
+      const res = await axios.post(`${API}/api/auth/agent/login`, { phone, pin }, { timeout: 15000 });
       const { token, agent } = res.data;
       await AsyncStorage.setItem('clerk_token', token);
       await AsyncStorage.setItem('clerk_name', agent.name);
