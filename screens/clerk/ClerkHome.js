@@ -124,9 +124,9 @@ export default function ClerkHome({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
+          </TouchableOpacity>
         </Modal>
-      </ScrollView>
+
     </SafeAreaView>
   );
 }
