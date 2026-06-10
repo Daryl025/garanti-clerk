@@ -117,7 +117,22 @@ export default function ClerkHome({ navigation }) {
                 <TouchableOpacity
                   key={trip.id}
                   style={s.pickerRow}
-                  onPress={() => { setTripPickerVisible(false); navigation.navigate('SeatMapView', { trip   pickerOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+                  onPress={() => { setTripPickerVisible(false); navigation.navigate('SeatMapView', { trip }); }}
+                >
+                  <Text style={s.pickerBus}>{trip.label}</Text>
+                  <Text style={s.pickerTime}>{trip.time}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const s = StyleSheet.create({
+  pickerOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   pickerSheet:    { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
   pickerTitle:    { fontSize: 15, fontWeight: '600', color: '#111110', marginBottom: 16, textAlign: 'center' },
   pickerRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
