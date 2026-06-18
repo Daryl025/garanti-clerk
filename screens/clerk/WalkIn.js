@@ -73,12 +73,18 @@ export default function WalkIn({ navigation }) {
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem('clerk_token');
+      // Get first available free seat for this trip
+      const seatsRes = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
+      const seats = seatsRes.data?.seats || seatsRes.data || [];
+      const freeSeatObj = seats.find(s => s.status === 'free' || s.status === 'available');
+      if (!freeSeatObj) { Alert.alert('Error', 'No seats available for this trip'); setSubmitting(false); return; }
+      const freeSeat = freeSeatObj.seat_number;
       const res = await axios.post(`${API}/api/tickets/book`, {
         trip_id: selectedTrip.id,
         passenger_name: name,
         passenger_phone: phone,
         passenger_id_no: idNo || null,
-        seat_numbers: [Math.floor(Math.random() * 30) + 1],
+        seat_numbers: [freeSeat],
         payment_method: payMethod,
         ticket_type: 'walkin',
         extra_bags: 0,
