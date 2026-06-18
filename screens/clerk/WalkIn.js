@@ -211,7 +211,7 @@ export default function WalkIn({ navigation }) {
                 activeOpacity={0.8}
               >
                 <View>
-                  <Text style={s.tripTime}>{trip.time} — {trip.label}</Text>
+                  <Text style={s.tripTime}>{trip.label} · Départ {trip.time}</Text>
                   <Text style={s.tripDest}>{trip.to}</Text>
                 </View>
                 <Text style={s.tripFare}>FCFA {trip.fare?.toLocaleString()}</Text>
