@@ -47,9 +47,9 @@ export default function QRScanner({ navigation }) {
     try {
       const token = await AsyncStorage.getItem('clerk_token');
       const payload = ref.trim()
-      const isQRPayload = payload.includes('|')
-      const ref = payload.includes("|") ? payload.split("|")[0] : payload; const body = { ticket_ref: ref }
-      const res = await axios.post(`${API}/api/tickets/validate`, body, {
+      const ticketRef = payload.includes("|") ? payload.split("|")[0] : payload
+      const body = { ticket_ref: ticketRef }
+
         timeout: 15000,
         headers: { Authorization: `Bearer ${token}` }
       });
