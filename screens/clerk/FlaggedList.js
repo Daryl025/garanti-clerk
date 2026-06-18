@@ -3,13 +3,8 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView, TextInput
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LangToggle from '../../components/LangToggle';
-
-const MOCK_FLAGS = [
-  { id: 1, ref: 'GE-4801', passenger: 'Fotso Jules',   reason: 'already_used', terminal: 'Douala Akwa', time: '08:12', agent: 'Nkeng Astride', status: 'open', notes: '' },
-  { id: 2, ref: 'GE-4791', passenger: 'Kamdem Roger',  reason: 'expired',      terminal: 'Douala Akwa', time: '08:55', agent: 'Nkeng Astride', status: 'open', notes: '' },
-  { id: 3, ref: 'GE-FAKE', passenger: 'Unknown',       reason: 'not_found',    terminal: 'Douala Akwa', time: '09:30', agent: 'Nkeng Astride', status: 'reviewed', notes: 'Passenger refused entry' },
-];
 
 const REASON_CONFIG = {
   already_used: { label: 'Already scanned', color: '#BA7517', bg: '#FAEEDA' },
@@ -19,32 +14,30 @@ const REASON_CONFIG = {
 };
 
 export default function FlaggedList({ navigation, route }) {
-  const [flags, setFlags]       = useState(MOCK_FLAGS);
-  const [filter, setFilter]     = useState('all'); // all | open | reviewed
+  const [flags, setFlags]       = useState([]);
+  const [filter, setFilter]     = useState('all');
   const [expandedId, setExpanded] = useState(null);
   const [noteText, setNoteText]   = useState('');
 
   useEffect(() => {
-    if (route?.params?.newFlag) {
-      const f = route.params.newFlag;
-      setFlags(prev => [{
-        id: Date.now(),
-        ref: f.ref,
-        passenger: f.passenger,
-        reason: f.reason,
-        terminal: 'Douala Akwa',
-        time: f.time,
-        agent: 'Nkeng Astride',
-        status: 'open',
-        notes: '',
-      }, ...prev]);
-    }
-  }, [route?.params?.newFlag]);
+    loadFlags();
+    const interval = setInterval(loadFlags, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  function markReviewed(id) {
-    setFlags(prev => prev.map(f =>
+  async function loadFlags() {
+    try {
+      const data = await AsyncStorage.getItem('clerk_flags');
+      if (data) setFlags(JSON.parse(data));
+    } catch (e) {}
+  }
+
+  async function markReviewed(id) {
+    const updated = flags.map(f =>
       f.id === id ? { ...f, status: 'reviewed', notes: noteText || f.notes } : f
-    ));
+    );
+    setFlags(updated);
+    await AsyncStorage.setItem('clerk_flags', JSON.stringify(updated));
     setExpanded(null);
     setNoteText('');
   }

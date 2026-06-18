@@ -60,6 +60,21 @@ export default function QRScanner({ navigation }) {
         AsyncStorage.setItem('clerk_scan_log', JSON.stringify(updated));
         return updated;
       });
+      if (status !== 'valid') {
+        const flag = {
+          id: Date.now(),
+          ref: ticket?.ref || ticketRef,
+          passenger: ticket?.passenger_name || 'Unknown',
+          reason: status,
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'open',
+          notes: '',
+        };
+        AsyncStorage.getItem('clerk_flags').then(data => {
+          const flags = data ? JSON.parse(data) : [];
+          AsyncStorage.setItem('clerk_flags', JSON.stringify([flag, ...flags.slice(0, 99)]));
+        });
+      }
     } catch (err) {
       const status = err.response?.data?.status || 'not_found';
       const ticket = err.response?.data?.ticket || null;
