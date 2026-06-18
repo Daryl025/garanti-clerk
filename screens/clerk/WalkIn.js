@@ -80,7 +80,7 @@ export default function WalkIn({ navigation }) {
         passenger_name: name,
         passenger_phone: phone,
         passenger_id_no: idNo || null,
-        seat_numbers: null,
+        seat_numbers: [Math.floor(Math.random() * 30) + 1],
         payment_method: payMethod,
         ticket_type: 'walkin',
         extra_bags: 0,
