@@ -48,7 +48,7 @@ export default function QRScanner({ navigation }) {
       const token = await AsyncStorage.getItem('clerk_token');
       const payload = ref.trim()
       const ticketRef = payload.includes("|") ? payload.split("|")[0] : payload
-      const body = { ticket_ref: ticketRef }
+      const body = payload.includes("|") ? { qr_payload: payload } : { ticket_ref: payload }
       const res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/validate`, body, {
         timeout: 15000,
         headers: { Authorization: `Bearer ${token}` }
@@ -77,6 +77,7 @@ export default function QRScanner({ navigation }) {
       }
     } catch (err) {
       const status = err.response?.data?.status || 'not_found';
+      console.log('Scan error:', err.response?.status, err.response?.data, err.message);
       const ticket = err.response?.data?.ticket || null;
       setResult({ status, ticket });
       setScanLog(prev => ({ ...prev, [status]: (prev[status] || 0) + 1 }));
