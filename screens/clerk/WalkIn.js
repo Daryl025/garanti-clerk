@@ -84,7 +84,7 @@ export default function WalkIn({ navigation }) {
         passenger_id_no: idNo || null,
         seat_numbers: [selectedSeat],
         payment_method: payMethod,
-        ticket_type: 'walkin',
+        ticket_type: 'online',
         extra_bags: 0,
         fare_paid: fare,
       }, {
