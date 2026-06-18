@@ -32,29 +32,34 @@ export default function WalkIn({ navigation }) {
   const [submitting, setSubmitting] = useState(false);
   const [seats, setSeats] = useState([]);
   const [selectedSeat, setSelectedSeat] = useState(null);
+  const [showTripPicker, setShowTripPicker] = useState(false);
   const [seatsLoading, setSeatsLoading] = useState(false);
 
-  // fetchTrips disabled — hardcoded trips always show correct labels
+  useEffect(() => {
+    fetchTrips();
+  }, []);
 
   async function fetchTrips() {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await axios.get(
-        `${API}/api/trips/search?origin=65887779-2ea0-4615-813f-45772a8f5770&destination=81bb4e6e-c758-47cd-a689-40e0f43a31f4&date=${today}&passengers=1`,
-        { timeout: 10000 }
-      );
-      const data = res.data.trips || res.data;
-      if (data && data.length) {
-        setTrips(data.map(t => ({
-          id: t.id,
-          time: t.depart_time?.slice(0,5),
-          label: t.trip_code || t.id.slice(0,8),
-          to: t.destination_name || 'Yaoundé Nsam',
-          fare: t.fare_standard || 6000,
-        })));
-      }
+      const res = await axios.get(`${API}/api/trips/today`, { timeout: 10000 });
+      const raw = res.data?.trips || [];
+      const mapped = raw.map(t => ({
+        id:    t.id,
+        label: t.bus_code,
+        time:  t.depart_time?.slice(0, 5) || '',
+        to:    t.destination_name,
+        from:  t.origin_name,
+        fare:  t.fare_standard || 5000,
+        avail: t.available_seats,
+      }));
+      setTrips(mapped);
     } catch (e) {
-      // keep fallback trips
+      console.log('fetchTrips error:', e.message);
+      // fallback to hardcoded if API fails
+      setTrips([
+        { id: '501afc2a-91eb-4136-a92d-e96da16242c9', label: 'GE-101', time: '06:00', to: 'Yaoundé Nsam', from: 'Douala Akwa', fare: 5000 },
+        { id: 'd94859c6-c214-4d78-a775-0c0bdc3a9c7b', label: 'GE-102', time: '13:00', to: 'Yaoundé Nsam', from: 'Douala Akwa', fare: 5000 },
+      ]);
     }
   }
 
@@ -373,4 +378,15 @@ const s = StyleSheet.create({
   smsPreview:      { backgroundColor: '#F7F7F5', borderRadius: 10, padding: 10, marginTop: 8 },
   smsLabel:        { fontSize: 11, color: '#ADADAA', marginBottom: 4 },
   smsText:         { fontSize: 12, color: '#333331', lineHeight: 18 },
+  dropdownBtn:     { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#EFEFED', paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  dropdownVal:     { fontSize: 14, color: '#111110', flex: 1 },
+  dropdownPlaceholder: { fontSize: 14, color: '#ADADAA', flex: 1 },
+  pickerSheet:     { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', marginTop: 6, overflow: 'hidden' },
+  pickerHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
+  pickerTitle:     { fontSize: 14, fontWeight: '600', color: '#111110' },
+  pickerItem:      { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' },
+  pickerItemActive:{ backgroundColor: '#3DB34A' },
+  pickerItemLabel: { fontSize: 14, fontWeight: '600', color: '#111110' },
+  pickerItemSub:   { fontSize: 12, color: '#737370', marginTop: 2 },
+  pickerItemFare:  { fontSize: 13, fontWeight: '600', color: '#3DB34A' },
 });
