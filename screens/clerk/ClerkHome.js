@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+const API = 'https://sweet-patience-production.up.railway.app';
+const FALLBACK_TRIPS = [
+  { id: '501afc2a-91eb-4136-a92d-e96da16242c9', label: 'GE-101', time: '06:00', dest: 'Yaoundé Nsam' },
+  { id: 'd94859c6-c214-4d78-a775-0c0bdc3a9c7b', label: 'GE-102', time: '13:00', dest: 'Yaoundé Nsam' },
+];
 import LangToggle from '../../components/LangToggle';
 
-const TODAY_TRIPS = [
-  { id: '501afc2a-91eb-4136-a92d-e96da16242c9', label: 'GE-101', time: '06:00' },
-  { id: 'd94859c6-c214-4d78-a775-0c0bdc3a9c7b', label: 'GE-102', time: '13:00' },
-];
+
 
 const ACTIONS = [
   { icon: '👤', label: 'Register Walk-in', sub: 'New passenger', screen: 'WalkIn', color: '#EAF3DE' },
@@ -19,11 +23,24 @@ export default function ClerkHome({ navigation }) {
   const [clerkName, setClerkName] = useState('');
   const [clerkTerminal, setClerkTerminal] = useState('');
   const [tripPickerVisible, setTripPickerVisible] = useState(false);
+  const [todayTrips, setTodayTrips] = useState(FALLBACK_TRIPS);
 
   useEffect(() => {
     AsyncStorage.getItem('clerk_name').then(n => setClerkName(n || 'Agent'));
+    fetchTodayTrips();
     AsyncStorage.getItem('clerk_terminal').then(t => setClerkTerminal(t || ''));
   }, []);
+
+  async function fetchTodayTrips() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await axios.get(`${API}/api/trips/search?origin=65887779-2ea0-4615-813f-45772a8f5770&destination=81bb4e6e-c758-47cd-a689-40e0f43a31f4&date=${today}&passengers=1`, { timeout: 8000 });
+      const data = res.data.trips || res.data;
+      if (data && data.length) {
+        setTodayTrips(data.map(t => ({ id: t.id, label: t.trip_code || t.id.slice(0,8), time: t.depart_time?.slice(0,5), dest: t.destination_name || 'Yaoundé' })));
+      }
+    } catch (e) { /* keep fallback */ }
+  }
 
   async function logout() {
     await AsyncStorage.removeItem('clerk_token');
@@ -84,7 +101,7 @@ export default function ClerkHome({ navigation }) {
         <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setTripPickerVisible(false)}>
           <View style={s.pickerSheet}>
             <Text style={s.pickerTitle}>Choisir un voyage</Text>
-            {TODAY_TRIPS.map(trip => (
+            {todayTrips.map(trip => (
               <TouchableOpacity
                 key={trip.id}
                 style={s.pickerRow}
