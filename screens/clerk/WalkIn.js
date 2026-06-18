@@ -252,7 +252,7 @@ export default function WalkIn({ navigation }) {
                       {[...new Set(seats.map(s => s.seat_row))].sort((a,b)=>a-b).map(row => {
                         const rowSeats = seats.filter(s => s.seat_row === row);
                         const left = rowSeats.filter(s => ['A','B'].includes(s.seat_col));
-                        const right = rowSeats.filter(s => ['C','D'].includes(s.seat_col));
+                        const right = rowSeats.filter(s => ['C','D','E'].includes(s.seat_col));
                         return (
                           <View key={row} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, justifyContent: 'center' }}>
                             <Text style={{ fontSize: 10, color: '#DDDDD9', width: 20, textAlign: 'right' }}>{row}</Text>
