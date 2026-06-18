@@ -31,9 +31,7 @@ export default function WalkIn({ navigation }) {
   const [trips, setTrips]           = useState(FALLBACK_TRIPS);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchTrips();
-  }, []);
+  // fetchTrips disabled — hardcoded trips always show correct labels
 
   async function fetchTrips() {
     try {
