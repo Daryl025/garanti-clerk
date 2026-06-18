@@ -237,39 +237,59 @@ export default function WalkIn({ navigation }) {
                   <ActivityIndicator color="#3DB34A" style={{ marginVertical: 10 }} />
                 ) : (
                   <>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                      {[{label:'Free',color:'#EFEFED'},{label:'Booked',color:'#E24B4A'},{label:'Selected',color:'#3DB34A'}].map(l => (
-                        <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: l.color }} />
-                          <Text style={{ fontSize: 11, color: '#737370' }}>{l.label}</Text>
+                    <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, marginBottom: 10, gap: 6 }}>
+                      {[{label:'Available',color:'#378ADD'},{label:'Booked',color:'#E24B4A'},{label:'Selected',color:'#3DB34A'}].map(l => (
+                        <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' }}>
+                          <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: l.color }} />
+                          <Text style={{ fontSize: 12, color: '#333331' }}>{l.label}</Text>
                         </View>
                       ))}
                     </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                      {seats.map(seat => {
-                        const isBooked = seat.status === 'booked';
-                        const isSelected = selectedSeat === seat.seat_number;
+                    <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, alignItems: 'center' }}>
+                      <View style={{ backgroundColor: '#F7F7F5', borderRadius: 6, padding: 6, alignItems: 'center', marginBottom: 8, width: '100%' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#ADADAA', letterSpacing: 0.8 }}>DRIVER CABIN</Text>
+                      </View>
+                      {[...new Set(seats.map(s => s.seat_row))].sort((a,b)=>a-b).map(row => {
+                        const rowSeats = seats.filter(s => s.seat_row === row);
+                        const left = rowSeats.filter(s => ['A','B'].includes(s.seat_col));
+                        const right = rowSeats.filter(s => ['C','D'].includes(s.seat_col));
                         return (
-                          <TouchableOpacity
-                            key={seat.seat_number}
-                            disabled={isBooked}
-                            onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
-                            style={{
-                              width: 44, height: 44, borderRadius: 8,
-                              backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#fff',
-                              borderWidth: 1.5,
-                              borderColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#EFEFED',
-                              alignItems: 'center', justifyContent: 'center',
-                            }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: isBooked || isSelected ? '#fff' : '#111110' }}>
-                              {seat.seat_number}
-                            </Text>
-                          </TouchableOpacity>
+                          <View key={row} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 10, color: '#DDDDD9', width: 20, textAlign: 'right' }}>{row}</Text>
+                            {left.map(seat => {
+                              const isBooked = seat.status === 'booked' || seat.status === 'locked';
+                              const isSelected = selectedSeat === seat.seat_number;
+                              return (
+                                <TouchableOpacity
+                                  key={seat.seat_number}
+                                  disabled={isBooked}
+                                  onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
+                                  style={{ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD' }}
+                                >
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{seat.seat_number}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                            <View style={{ width: 16 }} />
+                            {right.map(seat => {
+                              const isBooked = seat.status === 'booked' || seat.status === 'locked';
+                              const isSelected = selectedSeat === seat.seat_number;
+                              return (
+                                <TouchableOpacity
+                                  key={seat.seat_number}
+                                  disabled={isBooked}
+                                  onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
+                                  style={{ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD' }}
+                                >
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{seat.seat_number}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
                         );
                       })}
+                      {seats.length === 0 && <Text style={{ fontSize: 12, color: '#ADADAA', padding: 20 }}>No seat data available</Text>}
                     </View>
-                    {seats.length === 0 && <Text style={{ fontSize: 12, color: '#ADADAA' }}>No seat data available</Text>}
                     {errors.seat && <Text style={s.errorText}>{errors.seat}</Text>}
                   </>
                 )}
