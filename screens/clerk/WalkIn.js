@@ -1,42 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, TextInput, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard
+  ScrollView, TextInput, KeyboardAvoidingView, TouchableWithoutFeedback,
+  Keyboard, ActivityIndicator, Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import LangToggle from '../../components/LangToggle';
 
-const TERMINALS = [
-  { code: 'GE-DLA-AKWA', name: 'Douala Akwa' },
-  { code: 'GE-DLA-BON',  name: 'Douala Bonabéri' },
-  { code: 'GE-YDE-NSAM', name: 'Yaoundé Nsam' },
-  { code: 'GE-BMD-CC',   name: 'Bamenda City Chemist' },
-  { code: 'GE-BFS',      name: 'Bafoussam' },
-  { code: 'GE-BUE',      name: 'Buea' },
-  { code: 'GE-LMB',      name: 'Limbe' },
-];
-
-const TRIPS = [
-  { id: 't1', time: '06:00', to: 'Yaoundé Nsam',  seats: 11, fare: 6000 },
-  { id: 't2', time: '10:30', to: 'Yaoundé Nsam',  seats: 7,  fare: 6000 },
-  { id: 't3', time: '14:00', to: 'Bamenda CC',     seats: 23, fare: 10500 },
-  { id: 't4', time: '16:00', to: 'Bafoussam',      seats: 18, fare: 5500 },
-];
-
+const API = 'https://sweet-patience-production.up.railway.app';
 const PAY_OPTIONS = [
   { key: 'cash',         label: 'Cash',         icon: '💵' },
   { key: 'mtn_momo',     label: 'MTN MoMo',     icon: '📱' },
   { key: 'orange_money', label: 'Orange Money', icon: '🟠' },
 ];
+const FALLBACK_TRIPS = [
+  { id: '501afc2a-91eb-4136-a92d-e96da16242c9', time: '06:00', label: 'GE-101', to: 'Yaoundé Nsam', fare: 6000 },
+  { id: 'd94859c6-c214-4d78-a775-0c0bdc3a9c7b', time: '13:00', label: 'GE-102', to: 'Yaoundé Nsam', fare: 6000 },
+];
 
 export default function WalkIn({ navigation }) {
-  const [name, setName]           = useState('');
-  const [phone, setPhone]         = useState('');
-  const [idNo, setIdNo]           = useState('');
-  const [selectedTrip, setTrip]   = useState(null);
-  const [seatClass, setSeatClass] = useState('standard');
-  const [payMethod, setPayMethod] = useState('cash');
-  const [errors, setErrors]       = useState({});
-  const [stage, setStage]         = useState('form'); // form | confirm
+  const [name, setName]             = useState('');
+  const [phone, setPhone]           = useState('');
+  const [idNo, setIdNo]             = useState('');
+  const [selectedTrip, setTrip]     = useState(null);
+  const [seatClass, setSeatClass]   = useState('standard');
+  const [payMethod, setPayMethod]   = useState('cash');
+  const [errors, setErrors]         = useState({});
+  const [stage, setStage]           = useState('form');
+  const [trips, setTrips]           = useState(FALLBACK_TRIPS);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchTrips();
+  }, []);
+
+  async function fetchTrips() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await axios.get(
+        `${API}/api/trips/search?origin=65887779-2ea0-4615-813f-45772a8f5770&destination=81bb4e6e-c758-47cd-a689-40e0f43a31f4&date=${today}&passengers=1`,
+        { timeout: 10000 }
+      );
+      const data = res.data.trips || res.data;
+      if (data && data.length) {
+        setTrips(data.map(t => ({
+          id: t.id,
+          time: t.depart_time?.slice(0,5),
+          label: t.trip_code || t.id.slice(0,8),
+          to: t.destination_name || 'Yaoundé Nsam',
+          fare: t.fare_standard || 6000,
+        })));
+      }
+    } catch (e) {
+      // keep fallback trips
+    }
+  }
 
   function validate() {
     const e = {};
@@ -52,9 +71,34 @@ export default function WalkIn({ navigation }) {
     setStage('confirm');
   }
 
-  function issueTicket() {
-    // TODO: wire to real backend
-    navigation.navigate('ClerkHome');
+  async function issueTicket() {
+    setSubmitting(true);
+    try {
+      const token = await AsyncStorage.getItem('clerk_token');
+      const res = await axios.post(`${API}/api/tickets/book`, {
+        trip_id: selectedTrip.id,
+        passenger_name: name,
+        passenger_phone: phone,
+        passenger_id_no: idNo || null,
+        seat_numbers: null,
+        payment_method: payMethod,
+        ticket_type: 'walkin',
+        extra_bags: 0,
+        fare_paid: fare,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
+      });
+      const ticket = res.data.tickets?.[0];
+      Alert.alert(
+        'Ticket Issued',
+        `Ref: ${ticket?.ref}\nSeat: ${ticket?.seat_number || 'Auto'}\nSMS sent to ${phone}`,
+        [{ text: 'Done', onPress: () => navigation.navigate('ClerkHome') }]
+      );
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || e.message);
+    }
+    setSubmitting(false);
   }
 
   const fare = selectedTrip
@@ -94,31 +138,27 @@ export default function WalkIn({ navigation }) {
               </Text>
             </View>
           </View>
-
           <View style={s.card}>
-            <Text style={s.cardTitle}>SEND TICKET TO PASSENGER</Text>
+            <Text style={s.cardTitle}>SMS CONFIRMATION</Text>
             <View style={s.smsPreview}>
-              <Text style={s.smsLabel}>📱 SMS preview</Text>
+              <Text style={s.smsLabel}>Will be sent automatically to {phone}</Text>
               <Text style={s.smsText}>
-                Garanti Express: Ticket confirmed! {selectedTrip?.time} to {selectedTrip?.to}. FCFA {fare.toLocaleString()}. Show QR at boarding gate.
+                Garanti Express: Ticket confirmed! {selectedTrip?.time} DLA to {selectedTrip?.to}. FCFA {fare.toLocaleString()}. Show QR at boarding.
               </Text>
-            </View>
-            <View style={s.sendRow}>
-              <TouchableOpacity style={s.sendBtn}>
-                <Text style={s.sendBtnText}>📱 SMS</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.sendBtn}>
-                <Text style={s.sendBtnText}>💬 WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.sendBtn}>
-                <Text style={s.sendBtnText}>🖨 Print</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
         <View style={s.footer}>
-          <TouchableOpacity style={s.btn} onPress={issueTicket} activeOpacity={0.85}>
-            <Text style={s.btnText}>✓ ISSUE TICKET</Text>
+          <TouchableOpacity
+            style={[s.btn, submitting && { opacity: 0.6 }]}
+            onPress={issueTicket}
+            disabled={submitting}
+            activeOpacity={0.85}
+          >
+            {submitting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.btnText}>Issue Ticket & Send SMS</Text>
+            }
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -126,170 +166,130 @@ export default function WalkIn({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={s.shell}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={s.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={s.title}>Register Walk-in</Text>
-        <LangToggle />
-      </View>
-
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView style={s.body} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
-
-          {/* Passenger info */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>PASSENGER INFO</Text>
-
-            <Text style={s.label}>Full Name</Text>
+        <SafeAreaView style={s.shell}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Text style={s.backText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>Walk-in Registration</Text>
+            <LangToggle />
+          </View>
+          <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
+            <Text style={s.label}>Full Name *</Text>
             <View style={[s.input, errors.name && s.inputError]}>
-              <Text style={s.inputIcon}>👤</Text>
-              <TextInput style={s.inputField} placeholder="e.g. Marie Nkomo" placeholderTextColor="#ADADAA"
+              <TextInput style={s.inputText} placeholder="e.g. Tchounga Paul" placeholderTextColor="#ADADAA"
                 value={name} onChangeText={v => { setName(v); setErrors(e => ({ ...e, name: null })); }} />
             </View>
             {errors.name && <Text style={s.errorText}>{errors.name}</Text>}
 
-            <Text style={[s.label, { marginTop: 10 }]}>Phone (SMS ticket)</Text>
+            <Text style={[s.label, { marginTop: 10 }]}>Phone *</Text>
             <View style={[s.input, errors.phone && s.inputError]}>
-              <Text style={s.inputIcon}>📞</Text>
-              <TextInput style={s.inputField} placeholder="e.g. 677123456" placeholderTextColor="#ADADAA"
+              <TextInput style={s.inputText} placeholder="+237 6XX XXX XXX" placeholderTextColor="#ADADAA"
                 value={phone} onChangeText={v => { setPhone(v); setErrors(e => ({ ...e, phone: null })); }}
-                keyboardType="phone-pad" maxLength={12} />
+                keyboardType="phone-pad" maxLength={15} />
             </View>
             {errors.phone && <Text style={s.errorText}>{errors.phone}</Text>}
 
-            <Text style={[s.label, { marginTop: 10 }]}>ID Number <Text style={{ color: '#ADADAA', fontWeight: '400' }}>(optional)</Text></Text>
+            <Text style={[s.label, { marginTop: 10 }]}>ID / CNI (optional)</Text>
             <View style={s.input}>
-              <Text style={s.inputIcon}>🪪</Text>
-              <TextInput style={s.inputField} placeholder="National ID / Passport" placeholderTextColor="#ADADAA"
+              <TextInput style={s.inputText} placeholder="National ID number" placeholderTextColor="#ADADAA"
                 value={idNo} onChangeText={setIdNo} />
             </View>
-          </View>
 
-          {/* Trip selection */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>SELECT DEPARTURE</Text>
-            {errors.trip && <Text style={s.errorText}>{errors.trip}</Text>}
-            {TRIPS.map(trip => (
+            <Text style={[s.label, { marginTop: 10 }]}>Select Departure *</Text>
+            {trips.map(trip => (
               <TouchableOpacity
                 key={trip.id}
-                style={[s.tripOption, selectedTrip?.id === trip.id && s.tripOptionActive]}
+                style={[s.tripCard, selectedTrip?.id === trip.id && s.tripCardSelected]}
                 onPress={() => { setTrip(trip); setErrors(e => ({ ...e, trip: null })); }}
-                activeOpacity={0.85}
+                activeOpacity={0.8}
               >
-                <Text style={s.tripTime}>{trip.time}</Text>
-                <Text style={s.tripTo}>{trip.to}</Text>
-                <View style={[s.seatsBadge, trip.seats <= 5 && { backgroundColor: '#FCEBEB' }]}>
-                  <Text style={[s.seatsBadgeText, trip.seats <= 5 && { color: '#791F1F' }]}>{trip.seats} seats</Text>
+                <View>
+                  <Text style={s.tripTime}>{trip.time} — {trip.label}</Text>
+                  <Text style={s.tripDest}>{trip.to}</Text>
                 </View>
+                <Text style={s.tripFare}>FCFA {trip.fare?.toLocaleString()}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+            {errors.trip && <Text style={s.errorText}>{errors.trip}</Text>}
 
-          {/* Class */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>CLASS</Text>
-            <View style={s.classRow}>
-              <TouchableOpacity
-                style={[s.classBtn, seatClass === 'standard' && s.classBtnActive]}
-                onPress={() => setSeatClass('standard')}
-              >
-                <Text style={[s.classBtnText, seatClass === 'standard' && s.classBtnTextActive]}>Standard</Text>
-                <Text style={[s.classBtnFare, seatClass === 'standard' && { color: '#3DB34A' }]}>
-                  FCFA {selectedTrip ? selectedTrip.fare.toLocaleString() : '—'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.classBtn, seatClass === 'vip' && s.classBtnActive]}
-                onPress={() => setSeatClass('vip')}
-              >
-                <Text style={[s.classBtnText, seatClass === 'vip' && s.classBtnTextActive]}>VIP</Text>
-                <Text style={[s.classBtnFare, seatClass === 'vip' && { color: '#3DB34A' }]}>
-                  FCFA {selectedTrip ? Math.round(selectedTrip.fare * 1.5).toLocaleString() : '—'}
-                </Text>
-              </TouchableOpacity>
+            <Text style={[s.label, { marginTop: 14 }]}>Seat Class</Text>
+            <View style={s.segRow}>
+              {['standard','vip'].map(c => (
+                <TouchableOpacity key={c} style={[s.seg, seatClass === c && s.segActive]} onPress={() => setSeatClass(c)}>
+                  <Text style={[s.segText, seatClass === c && s.segTextActive]}>
+                    {c === 'vip' ? 'VIP (+50%)' : 'Standard'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          </View>
 
-          {/* Payment */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>PAYMENT METHOD</Text>
-            {PAY_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[s.payOption, payMethod === opt.key && s.payOptionActive]}
-                onPress={() => setPayMethod(opt.key)}
-                activeOpacity={0.85}
-              >
-                <Text style={{ fontSize: 20 }}>{opt.icon}</Text>
-                <Text style={s.payLabel}>{opt.label}</Text>
-                {payMethod === opt.key && <Text style={{ color: '#3DB34A' }}>✓</Text>}
-              </TouchableOpacity>
-            ))}
+            <Text style={[s.label, { marginTop: 14 }]}>Payment Method</Text>
+            <View style={s.payRow}>
+              {PAY_OPTIONS.map(p => (
+                <TouchableOpacity key={p.key} style={[s.payBtn, payMethod === p.key && s.payBtnActive]} onPress={() => setPayMethod(p.key)} activeOpacity={0.8}>
+                  <Text style={s.payIcon}>{p.icon}</Text>
+                  <Text style={[s.payLabel, payMethod === p.key && { color: '#fff' }]}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ height: 100 }} />
+          </ScrollView>
+          <View style={s.footer}>
+            <View style={s.fareRow}>
+              <Text style={s.fareLabel}>Total</Text>
+              <Text style={s.fareVal}>FCFA {fare.toLocaleString()}</Text>
+            </View>
+            <TouchableOpacity style={s.btn} onPress={proceed} activeOpacity={0.85}>
+              <Text style={s.btnText}>Review & Confirm</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Total */}
-          <View style={s.totalRow}>
-            <Text style={s.totalLabel}>Total fare</Text>
-            <Text style={s.totalVal}>FCFA {fare.toLocaleString()}</Text>
-          </View>
-
-          <View style={{ height: 10 }} />
-        </ScrollView>
+        </SafeAreaView>
       </TouchableWithoutFeedback>
-
-      <View style={s.footer}>
-        <TouchableOpacity style={s.btn} onPress={proceed} activeOpacity={0.85}>
-          <Text style={s.btnText}>CONTINUE →</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  shell:            { flex: 1, backgroundColor: '#F7F7F5' },
-  header:           { backgroundColor: '#fff', padding: 14, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFED', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backText:         { fontSize: 14, color: '#3DB34A', fontWeight: '500' },
-  title:            { fontSize: 16, fontWeight: '600', color: '#111110' },
-  body:             { flex: 1, padding: 14 },
-  card:             { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 14, gap: 8 },
-  cardTitle:        { fontSize: 11, fontWeight: '600', color: '#737370', letterSpacing: 0.8, marginBottom: 4 },
-  label:            { fontSize: 11, fontWeight: '600', color: '#737370', letterSpacing: 0.8, textTransform: 'uppercase' },
-  input:            { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#EFEFED', borderRadius: 10, padding: 10, gap: 8 },
-  inputError:       { borderColor: '#E24B4A' },
-  inputIcon:        { fontSize: 16 },
-  inputField:       { flex: 1, fontSize: 14, color: '#111110' },
-  errorText:        { fontSize: 11, color: '#E24B4A' },
-  tripOption:       { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#EFEFED', borderRadius: 10, padding: 10, marginBottom: 6 },
-  tripOptionActive: { borderColor: '#3DB34A', backgroundColor: '#F8FEF5' },
-  tripTime:         { fontSize: 15, fontWeight: '600', color: '#111110', minWidth: 50 },
-  tripTo:           { flex: 1, fontSize: 13, color: '#737370' },
-  seatsBadge:       { backgroundColor: '#EAF3DE', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  seatsBadgeText:   { fontSize: 11, fontWeight: '500', color: '#27500A' },
-  classRow:         { flexDirection: 'row', gap: 8 },
-  classBtn:         { flex: 1, borderWidth: 1, borderColor: '#EFEFED', borderRadius: 10, padding: 12, alignItems: 'center', gap: 4 },
-  classBtnActive:   { borderColor: '#3DB34A', backgroundColor: '#F8FEF5' },
-  classBtnText:     { fontSize: 13, fontWeight: '600', color: '#737370' },
-  classBtnTextActive:{ color: '#3DB34A' },
-  classBtnFare:     { fontSize: 11, color: '#ADADAA' },
-  payOption:        { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#EFEFED', borderRadius: 10, padding: 10, marginBottom: 6 },
-  payOptionActive:  { borderColor: '#3DB34A', backgroundColor: '#F8FEF5' },
-  payLabel:         { flex: 1, fontSize: 13, fontWeight: '500', color: '#333331' },
-  totalRow:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EAF3DE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#C0DD97' },
-  totalLabel:       { fontSize: 13, color: '#27500A' },
-  totalVal:         { fontSize: 17, fontWeight: '700', color: '#3DB34A' },
-  footer:           { padding: 14, paddingBottom: 24, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#EFEFED' },
-  btn:              { backgroundColor: '#3DB34A', borderRadius: 14, padding: 15, alignItems: 'center' },
-  btnText:          { color: '#fff', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
-  summaryRow:       { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' },
-  summaryLabel:     { fontSize: 12, color: '#737370' },
-  summaryVal:       { fontSize: 12, fontWeight: '500', color: '#333331' },
-  smsPreview:       { backgroundColor: '#F7F7F5', borderRadius: 10, padding: 10, marginBottom: 8 },
-  smsLabel:         { fontSize: 10, color: '#ADADAA', marginBottom: 4 },
-  smsText:          { fontSize: 12, color: '#333331', lineHeight: 18 },
-  sendRow:          { flexDirection: 'row', gap: 8 },
-  sendBtn:          { flex: 1, borderWidth: 1, borderColor: '#3DB34A', borderRadius: 10, padding: 8, alignItems: 'center' },
-  sendBtnText:      { fontSize: 12, color: '#3DB34A', fontWeight: '500' },
+  shell:           { flex: 1, backgroundColor: '#F7F7F5' },
+  header:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', padding: 14, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
+  backText:        { fontSize: 14, color: '#3DB34A', fontWeight: '500' },
+  title:           { fontSize: 17, fontWeight: '600', color: '#111110' },
+  body:            { flex: 1, padding: 14 },
+  label:           { fontSize: 12, fontWeight: '600', color: '#737370', letterSpacing: 0.5, marginBottom: 6 },
+  input:           { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#EFEFED', paddingHorizontal: 12, paddingVertical: 10 },
+  inputText:       { fontSize: 14, color: '#111110' },
+  inputError:      { borderColor: '#E24B4A' },
+  errorText:       { fontSize: 11, color: '#E24B4A', marginTop: 4 },
+  tripCard:        { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', padding: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tripCardSelected:{ borderColor: '#3DB34A', backgroundColor: '#F0FAF1' },
+  tripTime:        { fontSize: 14, fontWeight: '600', color: '#111110' },
+  tripDest:        { fontSize: 12, color: '#737370', marginTop: 2 },
+  tripFare:        { fontSize: 13, fontWeight: '600', color: '#3DB34A' },
+  segRow:          { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  seg:             { flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#EFEFED', padding: 10, alignItems: 'center' },
+  segActive:       { backgroundColor: '#3DB34A', borderColor: '#3DB34A' },
+  segText:         { fontSize: 13, color: '#737370', fontWeight: '500' },
+  segTextActive:   { color: '#fff' },
+  payRow:          { flexDirection: 'row', gap: 8 },
+  payBtn:          { flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#EFEFED', padding: 10, alignItems: 'center', gap: 4 },
+  payBtnActive:    { backgroundColor: '#3DB34A', borderColor: '#3DB34A' },
+  payIcon:         { fontSize: 18 },
+  payLabel:        { fontSize: 11, color: '#737370', fontWeight: '500' },
+  footer:          { padding: 14, paddingBottom: 24, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#EFEFED' },
+  fareRow:         { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  fareLabel:       { fontSize: 13, color: '#737370' },
+  fareVal:         { fontSize: 16, fontWeight: '700', color: '#111110' },
+  btn:             { backgroundColor: '#3DB34A', borderRadius: 14, padding: 15, alignItems: 'center' },
+  btnText:         { color: '#fff', fontSize: 14, fontWeight: '600' },
+  card:            { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 14 },
+  cardTitle:       { fontSize: 11, fontWeight: '600', color: '#737370', letterSpacing: 0.8, marginBottom: 10 },
+  summaryRow:      { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  summaryLabel:    { fontSize: 13, color: '#737370' },
+  summaryVal:      { fontSize: 13, color: '#111110', fontWeight: '500' },
+  smsPreview:      { backgroundColor: '#F7F7F5', borderRadius: 10, padding: 10, marginTop: 8 },
+  smsLabel:        { fontSize: 11, color: '#ADADAA', marginBottom: 4 },
+  smsText:         { fontSize: 12, color: '#333331', lineHeight: 18 },
 });
