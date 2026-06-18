@@ -30,6 +30,9 @@ export default function WalkIn({ navigation }) {
   const [stage, setStage]           = useState('form');
   const [trips, setTrips]           = useState(FALLBACK_TRIPS);
   const [submitting, setSubmitting] = useState(false);
+  const [seats, setSeats] = useState([]);
+  const [selectedSeat, setSelectedSeat] = useState(null);
+  const [seatsLoading, setSeatsLoading] = useState(false);
 
   // fetchTrips disabled — hardcoded trips always show correct labels
 
@@ -60,6 +63,7 @@ export default function WalkIn({ navigation }) {
     if (!name.trim())  e.name  = 'Name is required';
     if (!phone.trim()) e.phone = 'Phone is required';
     if (!selectedTrip) e.trip  = 'Select a departure';
+    if (!selectedSeat)  e.seat  = 'Select a seat';
     return e;
   }
 
@@ -73,18 +77,12 @@ export default function WalkIn({ navigation }) {
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem('clerk_token');
-      // Get first available free seat for this trip
-      const seatsRes = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
-      const seats = seatsRes.data?.seats || seatsRes.data || [];
-      const freeSeatObj = seats.find(s => s.status === 'free' || s.status === 'available');
-      if (!freeSeatObj) { Alert.alert('Error', 'No seats available for this trip'); setSubmitting(false); return; }
-      const freeSeat = freeSeatObj.seat_number;
       const res = await axios.post(`${API}/api/tickets/book`, {
         trip_id: selectedTrip.id,
         passenger_name: name,
         passenger_phone: phone,
         passenger_id_no: idNo || null,
-        seat_numbers: [freeSeat],
+        seat_numbers: [selectedSeat],
         payment_method: payMethod,
         ticket_type: 'walkin',
         extra_bags: 0,
@@ -125,6 +123,7 @@ export default function WalkIn({ navigation }) {
             {[
               ['Passenger', name],
               ['Phone', phone],
+              ['Seat', selectedSeat],
               ['Departure', selectedTrip?.time],
               ['Destination', selectedTrip?.to],
               ['Class', seatClass === 'vip' ? 'VIP' : 'Standard'],
@@ -207,7 +206,19 @@ export default function WalkIn({ navigation }) {
               <TouchableOpacity
                 key={trip.id}
                 style={[s.tripCard, selectedTrip?.id === trip.id && s.tripCardSelected]}
-                onPress={() => { setTrip(trip); setErrors(e => ({ ...e, trip: null })); }}
+                onPress={async () => {
+                  setTrip(trip);
+                  setSelectedSeat(null);
+                  setErrors(e => ({ ...e, trip: null, seat: null }));
+                  setSeatsLoading(true);
+                  try {
+                    const token = await AsyncStorage.getItem('clerk_token');
+                    const res = await axios.get(`${API}/api/trips/${trip.id}/seats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
+                    const raw = res.data?.seats || res.data || [];
+                    setSeats(Array.isArray(raw) ? raw : []);
+                  } catch { setSeats([]); }
+                  setSeatsLoading(false);
+                }}
                 activeOpacity={0.8}
               >
                 <View>
@@ -218,6 +229,52 @@ export default function WalkIn({ navigation }) {
               </TouchableOpacity>
             ))}
             {errors.trip && <Text style={s.errorText}>{errors.trip}</Text>}
+
+            {selectedTrip && (
+              <>
+                <Text style={[s.label, { marginTop: 14 }]}>Select Seat *</Text>
+                {seatsLoading ? (
+                  <ActivityIndicator color="#3DB34A" style={{ marginVertical: 10 }} />
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {[{label:'Free',color:'#EFEFED'},{label:'Booked',color:'#E24B4A'},{label:'Selected',color:'#3DB34A'}].map(l => (
+                        <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: l.color }} />
+                          <Text style={{ fontSize: 11, color: '#737370' }}>{l.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {seats.map(seat => {
+                        const isBooked = seat.status === 'booked';
+                        const isSelected = selectedSeat === seat.seat_number;
+                        return (
+                          <TouchableOpacity
+                            key={seat.seat_number}
+                            disabled={isBooked}
+                            onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
+                            style={{
+                              width: 44, height: 44, borderRadius: 8,
+                              backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#fff',
+                              borderWidth: 1.5,
+                              borderColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#EFEFED',
+                              alignItems: 'center', justifyContent: 'center',
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: isBooked || isSelected ? '#fff' : '#111110' }}>
+                              {seat.seat_number}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {seats.length === 0 && <Text style={{ fontSize: 12, color: '#ADADAA' }}>No seat data available</Text>}
+                    {errors.seat && <Text style={s.errorText}>{errors.seat}</Text>}
+                  </>
+                )}
+              </>
+            )}
 
             <Text style={[s.label, { marginTop: 14 }]}>Seat Class</Text>
             <View style={s.segRow}>
