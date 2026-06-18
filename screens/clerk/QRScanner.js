@@ -49,7 +49,7 @@ export default function QRScanner({ navigation }) {
       const payload = ref.trim()
       const ticketRef = payload.includes("|") ? payload.split("|")[0] : payload
       const body = { ticket_ref: ticketRef }
-      const res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/scan`, body, {
+      const res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/validate`, body, {
         timeout: 15000,
         headers: { Authorization: `Bearer ${token}` }
       });
