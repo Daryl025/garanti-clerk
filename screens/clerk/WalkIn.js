@@ -229,33 +229,56 @@ export default function WalkIn({ navigation }) {
             </View>
 
             <Text style={[s.label, { marginTop: 10 }]}>Select Departure *</Text>
-            {trips.map(trip => (
-              <TouchableOpacity
-                key={trip.id}
-                style={[s.tripCard, selectedTrip?.id === trip.id && s.tripCardSelected]}
-                onPress={async () => {
-                  setTrip(trip);
-                  setSelectedSeat(null);
-                  setErrors(e => ({ ...e, trip: null, seat: null }));
-                  setSeatsLoading(true);
-                  try {
-                    const token = await AsyncStorage.getItem('clerk_token');
-                    const res = await axios.get(`${API}/api/trips/${trip.id}/seats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
-                    const raw = res.data?.seats || res.data || [];
-                    setSeats(Array.isArray(raw) ? raw : []);
-                  } catch { setSeats([]); }
-                  setSeatsLoading(false);
-                }}
-                activeOpacity={0.8}
-              >
-                <View>
-                  <Text style={s.tripTime}>{trip.label} · Départ {trip.time}</Text>
-                  <Text style={s.tripDest}>{trip.to}</Text>
-                </View>
-                <Text style={s.tripFare}>FCFA {trip.fare?.toLocaleString()}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              style={[s.dropdownBtn, errors.trip && s.inputError]}
+              onPress={() => setShowTripPicker(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={selectedTrip ? s.dropdownVal : s.dropdownPlaceholder}>
+                {selectedTrip ? `${selectedTrip.label} · ${selectedTrip.time} — ${selectedTrip.from || ''} → ${selectedTrip.to}` : 'Choose a departure…'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#ADADAA' }}>▼</Text>
+            </TouchableOpacity>
             {errors.trip && <Text style={s.errorText}>{errors.trip}</Text>}
+
+            {showTripPicker && (
+              <View style={s.pickerSheet}>
+                <View style={s.pickerHeader}>
+                  <Text style={s.pickerTitle}>Select Departure</Text>
+                  <TouchableOpacity onPress={() => setShowTripPicker(false)}>
+                    <Text style={{ color: '#3DB34A', fontSize: 14, fontWeight: '600' }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+                {trips.length === 0
+                  ? <Text style={{ color: '#ADADAA', padding: 16, textAlign: 'center' }}>Loading trips…</Text>
+                  : trips.map(trip => (
+                    <TouchableOpacity
+                      key={trip.id}
+                      style={[s.pickerItem, selectedTrip?.id === trip.id && s.pickerItemActive]}
+                      onPress={() => {
+                        setTrip(trip);
+                        setSelectedSeat(null);
+                        setErrors(e => ({ ...e, trip: null, seat: null }));
+                        setShowTripPicker(false);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.pickerItemLabel, selectedTrip?.id === trip.id && { color: '#fff' }]}>
+                          {trip.label} · {trip.time}
+                        </Text>
+                        <Text style={[s.pickerItemSub, selectedTrip?.id === trip.id && { color: '#c8f0c8' }]}>
+                          {trip.from || ''} → {trip.to}
+                        </Text>
+                      </View>
+                      <Text style={[s.pickerItemFare, selectedTrip?.id === trip.id && { color: '#fff' }]}>
+                        FCFA {trip.fare?.toLocaleString()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                }
+              </View>
+            )}
 
             {selectedTrip && (
               <>
