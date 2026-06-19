@@ -39,6 +39,28 @@ export default function WalkIn({ navigation }) {
     fetchTrips();
   }, []);
 
+  // ── Seat sync: re-fetch seats every 10s when a trip is selected ──
+  async function fetchSeats(trip) {
+    if (!trip) return;
+    try {
+      const token = await AsyncStorage.getItem('clerk_token');
+      const res = await axios.get(`${API}/api/trips/${trip.id}/seats`, {
+        headers: { Authorization: `Bearer ${token}` }, timeout: 8000
+      });
+      const raw = res.data?.seats || res.data || [];
+      setSeats(raw);
+    } catch (e) { console.log('fetchSeats error:', e.message); }
+  }
+
+  useEffect(() => {
+    if (!selectedTrip) { setSeats([]); return; }
+    setSeatsLoading(true);
+    fetchSeats(selectedTrip).finally(() => setSeatsLoading(false));
+    const interval = setInterval(() => fetchSeats(selectedTrip), 10000);
+    return () => clearInterval(interval);
+  }, [selectedTrip]);
+
+
   async function fetchTrips() {
     try {
       const res = await axios.get(`${API}/api/trips/today`, { timeout: 10000 });
