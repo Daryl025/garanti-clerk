@@ -15,8 +15,8 @@ const PAY_OPTIONS = [
   { key: 'orange_money', label: 'Orange Money', icon: '🟠' },
 ];
 const FALLBACK_TRIPS = [
-  { id: '4d0abe26-4ffe-4c66-bbf6-262afb4c1da8', time: '06:00', label: 'GE-101', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
-  { id: '870a90b4-4f33-4977-9507-5939a9a96d3e', time: '13:00', label: 'GE-102', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
+  { id: '9ce29be5-b241-42cd-85fb-7feb5ded92c4', time: '06:00', label: 'GE-101', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
+  { id: '30dbfb01-81a2-4ae6-b4ba-4e6832b89f01', time: '13:00', label: 'GE-102', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
 ];
 
 export default function WalkIn({ navigation }) {
