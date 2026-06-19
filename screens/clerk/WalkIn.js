@@ -214,10 +214,7 @@ export default function WalkIn({ navigation }) {
               {selectedTrip && (
                 <>
                   <Text style={[s.label, { marginTop: 14 }]}>Select Seat *</Text>
-                  {seatsLoading ? (
-                    <ActivityIndicator color="#3DB34A" style={{ marginVertical: 10 }} />
-                  ) : (
-                    <>
+                  <>
                       <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, marginBottom: 10, gap: 6 }}>
                         {[{ label: 'Available', color: '#378ADD' }, { label: 'Booked', color: '#E24B4A' }, { label: 'Selected', color: '#3DB34A' }].map(l => (
                           <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' }}>
@@ -267,8 +264,7 @@ export default function WalkIn({ navigation }) {
                         })}
                         {seats.length === 0 && <Text style={{ fontSize: 12, color: '#ADADAA', padding: 20 }}>No seat data</Text>}
                       </View>
-                    </>
-                  )}
+                  </>
                   {errors.seat && <Text style={s.errorText}>{errors.seat}</Text>}
                 </>
               )}
