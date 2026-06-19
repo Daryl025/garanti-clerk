@@ -63,8 +63,7 @@ export default function WalkIn({ navigation }) {
         setSeats(r.data?.seats || []);
       } catch (e) { console.log('fetchSeats error:', e.message); }
     }
-    setSeatsLoading(true);
-    load().finally(() => setSeatsLoading(false));
+    load();
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [selectedTrip]);
