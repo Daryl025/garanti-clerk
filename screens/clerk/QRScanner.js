@@ -41,18 +41,43 @@ export default function QRScanner({ navigation }) {
     });
   }, []);
 
+  async function refreshToken() {
+    try {
+      const phone = await AsyncStorage.getItem('clerk_phone');
+      const pin = await AsyncStorage.getItem('clerk_pin');
+      if (!phone || !pin) return null;
+      const res = await axios.post('https://sweet-patience-production.up.railway.app/api/auth/agent/login', { phone, pin }, { timeout: 15000 });
+      const { token } = res.data;
+      await AsyncStorage.setItem('clerk_token', token);
+      return token;
+    } catch (e) { return null; }
+  }
+
   async function validateTicket(ref) {
     if (!ref.trim()) return;
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('clerk_token');
+      let token = await AsyncStorage.getItem('clerk_token');
       const payload = ref.trim()
       const ticketRef = payload.includes("|") ? payload.split("|")[0] : payload
       const body = payload.includes("|") ? { qr_payload: payload } : { ticket_ref: payload }
-      const res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/validate`, body, {
-        timeout: 15000,
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      let res;
+      try {
+        res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/validate`, body, {
+          timeout: 15000,
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (authErr) {
+        if (authErr.response?.status === 401) {
+          token = await refreshToken();
+          if (token) {
+            res = await axios.post(`https://sweet-patience-production.up.railway.app/api/tickets/validate`, body, {
+              timeout: 15000,
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          } else { throw authErr; }
+        } else { throw authErr; }
+      }
       const { status, ticket } = res.data;
       setResult({ status, ticket });
       setScanLog(prev => {
@@ -100,11 +125,13 @@ export default function QRScanner({ navigation }) {
     setScanned(false);
   }
 
+  const scanningRef = React.useRef(false);
   function onBarcodeScanned({ data }) {
-    if (scanned) return;
+    if (scanned || scanningRef.current) return;
+    scanningRef.current = true;
     setScanned(true);
     setScanning(false);
-    validateTicket(data);
+    validateTicket(data).finally(() => { scanningRef.current = false; });
   }
 
   function simulateScan(status) {
@@ -132,7 +159,7 @@ export default function QRScanner({ navigation }) {
 
   function reset() { setResult(null); setManualRef(''); setScanned(false); }
 
-  const cfg = result ? STATE_CONFIG[result.status] : null;
+  const cfg = result ? (STATE_CONFIG[result.status] || STATE_CONFIG["already_used"]) : null;
 
   return (
     <SafeAreaView style={s.shell}>

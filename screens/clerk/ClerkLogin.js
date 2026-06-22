@@ -26,6 +26,8 @@ export default function ClerkLogin({ navigation }) {
       await AsyncStorage.setItem('clerk_name', agent.name);
       await AsyncStorage.setItem('clerk_terminal', agent.terminal_name);
       await AsyncStorage.setItem('clerk_terminal_code', agent.terminal_id);
+      await AsyncStorage.setItem('clerk_phone', phone);
+      await AsyncStorage.setItem('clerk_pin', pin);
       navigation.replace('ClerkHome');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid phone or PIN');
