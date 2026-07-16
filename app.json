@@ -26,7 +26,8 @@
         "CAMERA"
       ],
       "package": "com.garantiexpress.clerk",
-      "enableJetifier": true
+      "enableJetifier": true,
+      "kotlinVersion": "1.9.24"
     },
     "web": {
       "output": "static",
