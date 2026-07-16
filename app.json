@@ -25,7 +25,8 @@
       "permissions": [
         "CAMERA"
       ],
-      "package": "com.garantiexpress.clerk"
+      "package": "com.garantiexpress.clerk",
+      "enableJetifier": true
     },
     "web": {
       "output": "static",
@@ -49,6 +50,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8cb64811-1a10-4084-861b-c99f26533cfa"
+      }
     }
   }
 }
