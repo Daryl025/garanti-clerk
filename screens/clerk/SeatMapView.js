@@ -1,13 +1,17 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { API } from '../../api';
-import { useAuthStore } from '../../store/useAuthStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SeatMapView({ route }) {
   const { trip } = route.params;
-  const token = useAuthStore(s => s.token);
+  const [token, setToken] = useState(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('clerk_token').then(t => setToken(t));
+  }, []);
   const [seats, setSeats] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
