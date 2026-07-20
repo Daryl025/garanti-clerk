@@ -10,7 +10,7 @@ export default function SeatMapView({ route }) {
   const [token, setToken] = useState(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('clerk_token').then(t => setToken(t));
+    AsyncStorage.getItem('userToken').then(t => setToken(t));
   }, []);
   const [seats, setSeats] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
