@@ -24,9 +24,11 @@ export default function SeatMapView({ route }) {
   async function load() {
     try {
       setRefreshing(true);
+      console.log('Loading manifest for trip:', trip.id, 'token:', token ? 'exists' : 'MISSING');
       const res = await axios.get(`${API}/api/trips/${trip.id}/seats/manifest`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log('Seats loaded:', res.data.seats?.length, 'booked:', res.data.seats?.filter(s=>s.status==='booked').length);
       setSeats(res.data.seats || []);
     } catch (e) {
       console.error('SeatMap error', e.message);
