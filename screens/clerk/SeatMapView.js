@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { API } from '../../api';
+import { useAuthStore } from '../../store/authStore';
 
 export default function SeatMapView({ route }) {
-  const { trip, token } = route.params;
+  const { trip } = route.params;
+  const token = useAuthStore(s => s.token);
   const [seats, setSeats] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
