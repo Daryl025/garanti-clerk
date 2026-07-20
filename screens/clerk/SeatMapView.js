@@ -33,9 +33,9 @@ export default function SeatMapView({ navigation, route }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [trip.id]);
+  }, [trip.id]));
 
-  useEffect(() => { loadSeats(); }, [loadSeats]);
+  useFocusEffect(useCallback(() => { loadSeats(); }, [loadSeats]);
 
   const rows = [...new Set(seats.map(s => s.seat_row))].sort((a, b) => a - b);
   const isVip = busType === 'vip';
