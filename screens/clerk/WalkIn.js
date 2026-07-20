@@ -56,7 +56,7 @@ export default function WalkIn({ navigation }) {
     if (!selectedTrip) { setSeats([]); return; }
     async function load() {
       try {
-        const token = await AsyncStorage.getItem('clerk_token');
+        const token = await AsyncStorage.getItem('userToken');
         const r = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats/manifest`, {
           headers: { Authorization: `Bearer ${token}` }, timeout: 8000
         });
@@ -82,7 +82,7 @@ export default function WalkIn({ navigation }) {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const token = await AsyncStorage.getItem('clerk_token');
+      const token = await AsyncStorage.getItem('userToken');
       const res = await axios.post(`${API}/api/tickets/book`, {
         trip_id:          selectedTrip.id,
         seat_numbers:     [selectedSeat],
