@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { API } from '../../api';
-import { useAuthStore } from '../../store/auth';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function SeatMapView({ route }) {
   const { trip } = route.params;
