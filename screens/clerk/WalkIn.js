@@ -57,7 +57,7 @@ export default function WalkIn({ navigation }) {
     async function load() {
       try {
         const token = await AsyncStorage.getItem('clerk_token');
-        const r = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats`, {
+        const r = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats/manifest`, {
           headers: { Authorization: `Bearer ${token}` }, timeout: 8000
         });
         setSeats(r.data?.seats || []);
