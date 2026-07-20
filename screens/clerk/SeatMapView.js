@@ -1,24 +1,24 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API } from '../../api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SeatMapView({ route }) {
   const { trip } = route.params;
+  const [seats, setSeats] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [token, setToken] = useState(null);
 
   useEffect(() => {
     AsyncStorage.getItem('userToken').then(t => setToken(t));
   }, []);
-  const [seats, setSeats] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [trip.id])
+      if (token) load();
+    }, [token, trip.id])
   );
 
   async function load() {
@@ -46,7 +46,7 @@ export default function SeatMapView({ route }) {
     return '#E2E8F0';
   }
 
-  function seatText(seat) {
+  function seatTextColor(seat) {
     if (seat.ticket_status === 'scanned') return '#fff';
     if (seat.status === 'booked') return '#fff';
     return '#4A5568';
@@ -82,9 +82,9 @@ export default function SeatMapView({ route }) {
           <View key={row} style={s.row}>
             <Text style={s.rowLabel}>{row}</Text>
             {seats.filter(seat => seat.seat_row === row).map(seat => (
-              <TouchableOpacity key={seat.seat_number} style={[s.seat, { backgroundColor: seatColor(seat) }]}>
-                <Text style={[s.seatText, { color: seatText(seat) }]}>{seat.seat_col}</Text>
-              </TouchableOpacity>
+              <View key={seat.seat_number} style={[s.seat, { backgroundColor: seatColor(seat) }]}>
+                <Text style={[s.seatText, { color: seatTextColor(seat) }]}>{seat.seat_col}</Text>
+              </View>
             ))}
           </View>
         ))}
