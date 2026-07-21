@@ -166,15 +166,18 @@ export default function WalkIn() {
             {rows.map(row => (
               <View key={row} style={{flexDirection:'row',alignItems:'center',marginBottom:6}}>
                 <Text style={{width:20,fontSize:11,color:'#ADADAA'}}>{row}</Text>
-                {seats.filter(st => st.seat_row === row).map(st => {
+                {seats.filter(st => st.seat_row === row).map((st, idx) => {
                   const isBooked = st.status === 'booked' || st.status === 'locked';
                   const isSelected = seat && seat.seat_number === st.seat_number;
                   return (
-                    <TouchableOpacity key={st.seat_number} disabled={isBooked} onPress={() => setSeat(st)}
-                      style={{width:36,height:36,borderRadius:6,margin:3,alignItems:'center',justifyContent:'center',
-                        backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD'}}>
-                      <Text style={{fontSize:9,fontWeight:'700',color:'#fff'}}>{st.seat_number}</Text>
-                    </TouchableOpacity>
+                    <React.Fragment key={st.seat_number}>
+                      {st.seat_col === 'C' && <View style={{width:16}} />}
+                      <TouchableOpacity disabled={isBooked} onPress={() => setSeat(st)}
+                        style={{width:36,height:36,borderRadius:6,margin:3,alignItems:'center',justifyContent:'center',
+                          backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD'}}>
+                        <Text style={{fontSize:9,fontWeight:'700',color:'#fff'}}>{st.seat_number}</Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
                   );
                 })}
               </View>
