@@ -31,7 +31,7 @@ export default function WalkIn({ navigation }) {
   const [idNo, setIdNo]           = useState('');
   const [from, setFrom]           = useState(null);
   const [to, setTo]               = useState(null);
-  const [date, setDate]           = useState(new Date());
+  const today = new Date(); const [date, setDate] = useState(formatDate(today));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker]     = useState(false);
@@ -56,7 +56,7 @@ export default function WalkIn({ navigation }) {
     setSelectedTrip(null);
     setSeats([]);
     setSelectedSeat(null);
-    const ds = formatDate(date);
+    const ds = date;
     console.log('Searching:', from.code, to.code, ds);
     axios.get(`${API}/api/trips/search?origin=${encodeURIComponent(from.code)}&destination=${encodeURIComponent(to.code)}&date=${ds}&passengers=1`)
       .then(r => { console.log('Results:', r.data?.trips?.length); setTrips(r.data?.trips || []); })
@@ -149,7 +149,7 @@ export default function WalkIn({ navigation }) {
       {/* Date */}
       <Text style={s.label}>Date *</Text>
       <TouchableOpacity style={s.picker} onPress={() => setShowDatePicker(true)}>
-        <Text style={{ color: '#111110', fontSize: 15 }}>{date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+        <Text style={{ color: '#111110', fontSize: 15 }}>{new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
         <Text style={{ color: '#ADADAA' }}>📅</Text>
       </TouchableOpacity>
       {showDatePicker && (
@@ -158,7 +158,7 @@ export default function WalkIn({ navigation }) {
           mode="date"
           display="spinner"
           minimumDate={new Date()}
-          onChange={(event, d) => { setShowDatePicker(false); if (d) setDate(d); }}
+          onChange={(event, d) => { setShowDatePicker(false); if (d) setDate(formatDate(d)); }}
         />
       )}
 
