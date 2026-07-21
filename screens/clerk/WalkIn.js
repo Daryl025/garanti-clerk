@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import LangToggle from '../../components/LangToggle';
 
 const API = 'https://sweet-patience-production.up.railway.app';
@@ -28,6 +29,8 @@ export default function WalkIn({ navigation }) {
   const [errors, setErrors]           = useState({});
   const [stage, setStage]             = useState('form');
   const [trips, setTrips]             = useState(FALLBACK_TRIPS);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting]   = useState(false);
   const [seats, setSeats]             = useState([]);
   const [selectedSeat, setSelectedSeat] = useState(null);
@@ -36,7 +39,8 @@ export default function WalkIn({ navigation }) {
 
   // Load live trips on mount
   useEffect(() => {
-    axios.get(`${API}/api/trips/today`, { timeout: 10000 })
+    const ds = selectedDate.getFullYear() + '-' + String(selectedDate.getMonth()+1).padStart(2,'0') + '-' + String(selectedDate.getDate()).padStart(2,'0');
+    axios.get(`${API}/api/trips/today?date=${ds}`, { timeout: 10000 })
       .then(r => {
         const mapped = (r.data?.trips || []).map(t => ({
           id:    t.id,
@@ -49,7 +53,7 @@ export default function WalkIn({ navigation }) {
         if (mapped.length > 0) setTrips(mapped);
       })
       .catch(() => {});
-  }, []);
+  }, [selectedDate]);
 
   // Fetch seats + poll every 10s when trip selected
   useEffect(() => {
