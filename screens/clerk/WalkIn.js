@@ -54,16 +54,18 @@ export default function WalkIn({ navigation }) {
   useEffect(() => {
     if (!from || !to || !date) return;
     setTrips([]);
-    setSelectedTrip(null);
-    setSeats([]);
-    setSelectedSeat(null);
-    const ds = date;
-    console.log('Searching:', from.code, to.code, ds);
-    axios.get(`${API}/api/trips/search?origin=${encodeURIComponent(from.code)}&destination=${encodeURIComponent(to.code)}&date=${ds}&passengers=1`)
-      .then(r => { console.log('Results:', r.data?.trips?.length); setTrips(r.data?.trips || []); })
-      .catch(e => { console.log('Search error:', e.message); setTrips([]); });
-  }, [from, to, date]);
-
+  async function pickTrip(t) {
+    setTrip(t);
+    setShowTrip(false);
+    setSeats([]); setSeat(null);
+    try {
+      const tk = await AsyncStorage.getItem("userToken");
+      const r = await axios.get(`${API}/api/trips/${t.id}/seats/manifest`, {
+        headers: { Authorization: `Bearer ${tk}` }
+      });
+      setSeats(r.data?.seats || []);
+    } catch(e) { console.log("seat error", e.message); }
+  }
   useEffect(() => {
     if (!selectedTrip || !token) return;
     setSeats([]);
