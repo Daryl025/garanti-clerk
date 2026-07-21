@@ -6,7 +6,8 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { API } from '../../api';
+import { api as axiosApi } from '../../api';
+const API = axiosApi.defaults.baseURL;
 
 const TERMINALS = [
   { code: 'GE-DLA-AKWA', name: 'Douala Akwa' },
