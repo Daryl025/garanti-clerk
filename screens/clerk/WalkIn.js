@@ -57,7 +57,7 @@ export default function WalkIn({ navigation }) {
     setSeats([]);
     setSelectedSeat(null);
     const ds = formatDate(date);
-    axios.get(`${API}/api/trips/search?origin=${from.code}&destination=${to.code}&date=${ds}&passengers=1`)
+    axios.get(`${API}/api/trips/search?origin=${from.code}&destination=${to.code}&date=${ds}&passengers=1`).then(r => { console.log('SEARCH URL:', `${API}/api/trips/search?origin=${from.code}&destination=${to.code}&date=${ds}`); return r; })
       .then(r => setTrips(r.data?.trips || []))
       .catch(() => setTrips([]));
   }, [from, to, date]);
