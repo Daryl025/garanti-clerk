@@ -1,353 +1,306 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, TextInput, KeyboardAvoidingView, TouchableWithoutFeedback,
-  Keyboard, ActivityIndicator, Alert
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  StyleSheet, ActivityIndicator, Modal, FlatList, Platform
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import LangToggle from '../../components/LangToggle';
+import { API } from '../../api';
 
-const API = 'https://sweet-patience-production.up.railway.app';
-const PAY_OPTIONS = [
-  { key: 'cash',         label: 'Cash',         icon: '💵' },
-  { key: 'mtn_momo',     label: 'MTN MoMo',     icon: '📱' },
-  { key: 'orange_money', label: 'Orange Money', icon: '🟠' },
+const TERMINALS = [
+  { code: 'GE-DLA-AKWA', name: 'Douala Akwa' },
+  { code: 'GE-DLA-BON',  name: 'Douala Bonabéri' },
+  { code: 'GE-YDE-NSAM', name: 'Yaoundé Nsam' },
+  { code: 'GE-BMD-CC',   name: 'Bamenda City Chemist' },
+  { code: 'GE-BFS',      name: 'Bafoussam' },
+  { code: 'GE-BUE',      name: 'Buea' },
+  { code: 'GE-LMB',      name: 'Limbe' },
 ];
-const FALLBACK_TRIPS = [
-  { id: '9ce29be5-b241-42cd-85fb-7feb5ded92c4', time: '06:00', label: 'GE-101', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
-  { id: '30dbfb01-81a2-4ae6-b4ba-4e6832b89f01', time: '13:00', label: 'GE-102', from: 'Douala Akwa', to: 'Yaoundé Nsam', fare: 6000 },
-];
+
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export default function WalkIn({ navigation }) {
-  const [name, setName]               = useState('');
-  const [phone, setPhone]             = useState('');
-  const [idNo, setIdNo]               = useState('');
-  const [selectedTrip, setTrip]       = useState(null);
-  const [payMethod, setPayMethod]     = useState('cash');
-  const [errors, setErrors]           = useState({});
-  const [stage, setStage]             = useState('form');
-  const [trips, setTrips]             = useState(FALLBACK_TRIPS);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [name, setName]           = useState('');
+  const [phone, setPhone]         = useState('');
+  const [idNo, setIdNo]           = useState('');
+  const [from, setFrom]           = useState(null);
+  const [to, setTo]               = useState(null);
+  const [date, setDate]           = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [submitting, setSubmitting]   = useState(false);
-  const [seats, setSeats]             = useState([]);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker]     = useState(false);
+  const [trips, setTrips]         = useState([]);
+  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [showTripPicker, setShowTripPicker] = useState(false);
+  const [seats, setSeats]         = useState([]);
   const [selectedSeat, setSelectedSeat] = useState(null);
-  const [showPicker, setShowPicker]   = useState(false);
-  const [seatsLoading, setSeatsLoading] = useState(false);
+  const [payment, setPayment]     = useState('cash');
+  const [loading, setLoading]     = useState(false);
+  const [issuing, setIssuing]     = useState(false);
+  const [issued, setIssued]       = useState(null);
+  const [token, setToken]         = useState(null);
 
-  // Load live trips on mount
   useEffect(() => {
-    const ds = selectedDate.getFullYear() + '-' + String(selectedDate.getMonth()+1).padStart(2,'0') + '-' + String(selectedDate.getDate()).padStart(2,'0');
-    axios.get(`${API}/api/trips/today?date=${ds}`, { timeout: 10000 })
-      .then(r => {
-        const mapped = (r.data?.trips || []).map(t => ({
-          id:    t.id,
-          label: t.bus_code,
-          time:  t.depart_time?.slice(0, 5) || '',
-          from:  t.origin_name,
-          to:    t.destination_name,
-          fare:  t.fare_standard || 5000,
-        }));
-        if (mapped.length > 0) setTrips(mapped);
-      })
-      .catch(() => {});
-  }, [selectedDate]);
+    AsyncStorage.getItem('userToken').then(t => setToken(t));
+  }, []);
 
-  // Fetch seats + poll every 10s when trip selected
   useEffect(() => {
-    if (!selectedTrip) { setSeats([]); return; }
-    async function load() {
-      try {
-        const token = await AsyncStorage.getItem('userToken');
-        const r = await axios.get(`${API}/api/trips/${selectedTrip.id}/seats/manifest`, {
-          headers: { Authorization: `Bearer ${token}` }, timeout: 8000
-        });
-        setSeats(r.data?.seats || []);
-      } catch (e) { console.log('fetchSeats error:', e.message); }
-    }
-    load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
-  }, [selectedTrip]);
+    if (!from || !to || !date) return;
+    setTrips([]);
+    setSelectedTrip(null);
+    setSeats([]);
+    setSelectedSeat(null);
+    const ds = formatDate(date);
+    axios.get(`${API}/api/trips/search?origin=${from.code}&destination=${to.code}&date=${ds}&passengers=1`)
+      .then(r => setTrips(r.data?.trips || []))
+      .catch(() => setTrips([]));
+  }, [from, to, date]);
 
-  function validate() {
-    const e = {};
-    if (!name.trim()) e.name = 'Name required';
-    if (!phone.trim()) e.phone = 'Phone required';
-    if (!selectedTrip) e.trip = 'Select a departure';
-    if (!selectedSeat) e.seat = 'Select a seat';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
+  useEffect(() => {
+    if (!selectedTrip || !token) return;
+    setSeats([]);
+    setSelectedSeat(null);
+    axios.get(`${API}/api/trips/${selectedTrip.id}/seats/manifest`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => setSeats(r.data?.seats || [])).catch(() => {});
+  }, [selectedTrip, token]);
 
-  async function submit() {
-    if (!validate()) return;
-    setSubmitting(true);
+  async function issueTicket() {
+    if (!name || !phone || !from || !to || !selectedTrip || !selectedSeat) return;
+    setIssuing(true);
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      const res = await axios.post(`${API}/api/tickets/book`, {
-        trip_id:          selectedTrip.id,
-        seat_numbers:     [selectedSeat],
-        passenger_name:   name.trim(),
-        passenger_phone:  phone.trim(),
-        passenger_id:     idNo.trim() || undefined,
-        payment_method:   payMethod,
-        ticket_type:      'online',
-        seat_class:       'standard',
-      }, { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 });
-      if (res.data?.tickets?.length || res.data?.ticket) {
-        setStage('success');
-      } else {
-        Alert.alert('Error', res.data?.error || 'Booking failed');
-      }
+      const t = token || await AsyncStorage.getItem('userToken');
+      const r = await axios.post(`${API}/api/tickets/book`, {
+        trip_id: selectedTrip.id,
+        seat_numbers: [selectedSeat.seat_number],
+        passenger_name: name,
+        passenger_phone: phone,
+        passenger_id_no: idNo || null,
+        payment_method: payment,
+        seat_class: 'standard',
+      }, { headers: { Authorization: `Bearer ${t}` } });
+      setIssued(r.data.tickets?.[0]);
     } catch (e) {
-      Alert.alert('Error', e.response?.data?.error || e.message || 'Network error');
+      alert(e.response?.data?.error || 'Failed to issue ticket');
     } finally {
-      setSubmitting(false);
+      setIssuing(false);
     }
   }
 
   function reset() {
     setName(''); setPhone(''); setIdNo('');
-    setTrip(null); setSelectedSeat(null);
-    setPayMethod('cash'); setErrors({});
-    setSeats([]); setStage('form');
+    setFrom(null); setTo(null); setDate(new Date());
+    setTrips([]); setSelectedTrip(null);
+    setSeats([]); setSelectedSeat(null);
+    setIssued(null);
   }
 
-  if (stage === 'success') {
+  const rows = [...new Set(seats.map(s => s.seat_row))].sort((a, b) => a - b);
+
+  if (issued) {
     return (
-      <SafeAreaView style={s.shell}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Text style={{ fontSize: 48 }}>✅</Text>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111110', marginTop: 16 }}>Ticket Issued</Text>
-          <Text style={{ fontSize: 14, color: '#737370', marginTop: 8, textAlign: 'center' }}>
-            {name} · Seat {selectedSeat} · {selectedTrip?.label} {selectedTrip?.time}
-          </Text>
-          <TouchableOpacity style={[s.btn, { marginTop: 32, paddingHorizontal: 40 }]} onPress={reset}>
-            <Text style={s.btnText}>New Booking</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={[s.container, { alignItems: 'center', justifyContent: 'center', padding: 32 }]}>
+        <Text style={{ fontSize: 48 }}>✅</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#111110', marginTop: 16 }}>Ticket Issued</Text>
+        <Text style={{ fontSize: 14, color: '#737370', marginTop: 8, textAlign: 'center' }}>
+          {issued.ref} · Seat {issued.seat_number}{'\n'}{name} · {phone}
+        </Text>
+        <TouchableOpacity onPress={reset} style={[s.btn, { marginTop: 32 }]}>
+          <Text style={s.btnText}>Issue Another Ticket</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={s.shell}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={{ flex: 1 }}>
-            {/* Header */}
-            <View style={s.header}>
-              <View style={{ flex: 1 }}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                  <Text style={s.backText}>← Back</Text>
-                </TouchableOpacity>
-                <Text style={s.title}>Walk-in Registration</Text>
-              </View>
-              <LangToggle />
-            </View>
+    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
+      <Text style={s.title}>Walk-in Registration</Text>
 
-            <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
-              {/* Name */}
-              <Text style={s.label}>Full Name *</Text>
-              <View style={[s.input, errors.name && s.inputError]}>
-                <TextInput style={s.inputText} placeholder="e.g. Tchounga Paul" placeholderTextColor="#ADADAA"
-                  value={name} onChangeText={v => { setName(v); setErrors(e => ({ ...e, name: null })); }} />
-              </View>
-              {errors.name && <Text style={s.errorText}>{errors.name}</Text>}
+      {/* Passenger Info */}
+      <Text style={s.label}>Full Name *</Text>
+      <TextInput style={s.input} placeholder="Passenger name" value={name} onChangeText={setName} />
 
-              {/* Phone */}
-              <Text style={[s.label, { marginTop: 10 }]}>Phone *</Text>
-              <View style={[s.input, errors.phone && s.inputError]}>
-                <TextInput style={s.inputText} placeholder="+237 6XX XXX XXX" placeholderTextColor="#ADADAA"
-                  value={phone} onChangeText={v => { setPhone(v); setErrors(e => ({ ...e, phone: null })); }}
-                  keyboardType="phone-pad" maxLength={15} />
-              </View>
-              {errors.phone && <Text style={s.errorText}>{errors.phone}</Text>}
+      <Text style={s.label}>Phone *</Text>
+      <TextInput style={s.input} placeholder="+237 6XX XXX XXX" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
 
-              {/* ID */}
-              <Text style={[s.label, { marginTop: 10 }]}>ID / CNI (optional)</Text>
-              <View style={s.input}>
-                <TextInput style={s.inputText} placeholder="National ID number" placeholderTextColor="#ADADAA"
-                  value={idNo} onChangeText={setIdNo} />
-              </View>
+      <Text style={s.label}>ID / CNI (optional)</Text>
+      <TextInput style={s.input} placeholder="National ID number" value={idNo} onChangeText={setIdNo} />
 
-              {/* Trip dropdown */}
-              <Text style={[s.label, { marginTop: 10 }]}>Select Departure *</Text>
-              <TouchableOpacity style={[s.dropdownBtn, errors.trip && s.inputError]} onPress={() => setShowPicker(true)} activeOpacity={0.8}>
-                <Text style={selectedTrip ? s.dropdownVal : s.dropdownPlaceholder}>
-                  {selectedTrip ? `${selectedTrip.label} · ${selectedTrip.time} — ${selectedTrip.to}` : 'Choose a departure…'}
-                </Text>
-                <Text style={{ color: '#ADADAA' }}>▼</Text>
-              </TouchableOpacity>
-              {errors.trip && <Text style={s.errorText}>{errors.trip}</Text>}
+      {/* Route */}
+      <Text style={s.label}>From *</Text>
+      <TouchableOpacity style={s.picker} onPress={() => setShowFromPicker(true)}>
+        <Text style={{ color: from ? '#111110' : '#ADADAA', fontSize: 15 }}>{from ? from.name : 'Select origin...'}</Text>
+        <Text style={{ color: '#ADADAA' }}>▼</Text>
+      </TouchableOpacity>
 
-              {/* Trip picker sheet */}
-              {showPicker && (
-                <View style={s.pickerSheet}>
-                  <View style={s.pickerHeader}>
-                    <Text style={s.pickerTitle}>Select Departure</Text>
-                    <TouchableOpacity onPress={() => setShowPicker(false)}>
-                      <Text style={{ color: '#3DB34A', fontSize: 14, fontWeight: '600' }}>Close</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {trips.map(trip => (
-                    <TouchableOpacity key={trip.id}
-                      style={[s.pickerItem, selectedTrip?.id === trip.id && { backgroundColor: '#3DB34A' }]}
-                      onPress={() => { setTrip(trip); setSelectedSeat(null); setErrors(e => ({ ...e, trip: null })); setShowPicker(false); }}
-                      activeOpacity={0.8}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.pickerItemLabel, selectedTrip?.id === trip.id && { color: '#fff' }]}>
-                          {trip.label} · {trip.time}
-                        </Text>
-                        <Text style={[{ fontSize: 12, color: '#737370', marginTop: 2 }, selectedTrip?.id === trip.id && { color: '#c8f0c8' }]}>
-                          {trip.from} → {trip.to}
-                        </Text>
-                      </View>
-                      <Text style={[{ fontSize: 13, fontWeight: '600', color: '#3DB34A' }, selectedTrip?.id === trip.id && { color: '#fff' }]}>
-                        FCFA {trip.fare?.toLocaleString()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+      <Text style={s.label}>To *</Text>
+      <TouchableOpacity style={s.picker} onPress={() => setShowToPicker(true)}>
+        <Text style={{ color: to ? '#111110' : '#ADADAA', fontSize: 15 }}>{to ? to.name : 'Select destination...'}</Text>
+        <Text style={{ color: '#ADADAA' }}>▼</Text>
+      </TouchableOpacity>
+
+      {/* Date */}
+      <Text style={s.label}>Date *</Text>
+      <TouchableOpacity style={s.picker} onPress={() => setShowDatePicker(true)}>
+        <Text style={{ color: '#111110', fontSize: 15 }}>{date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+        <Text style={{ color: '#ADADAA' }}>📅</Text>
+      </TouchableOpacity>
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="spinner"
+          minimumDate={new Date()}
+          onChange={(event, d) => { setShowDatePicker(false); if (d) setDate(d); }}
+        />
+      )}
+
+      {/* Trip */}
+      {trips.length > 0 && (
+        <>
+          <Text style={s.label}>Select Departure *</Text>
+          <TouchableOpacity style={s.picker} onPress={() => setShowTripPicker(true)}>
+            <Text style={{ color: selectedTrip ? '#111110' : '#ADADAA', fontSize: 15 }}>
+              {selectedTrip ? `${selectedTrip.bus_code} · ${selectedTrip.depart_time?.slice(0,5)} → ${selectedTrip.arrive_time?.slice(0,5)}` : 'Select trip...'}
+            </Text>
+            <Text style={{ color: '#ADADAA' }}>▼</Text>
+          </TouchableOpacity>
+        </>
+      )}
+      {from && to && trips.length === 0 && (
+        <Text style={{ color: '#ADADAA', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>No trips found for this route and date.</Text>
+      )}
+
+      {/* Seat Map */}
+      {seats.length > 0 && (
+        <>
+          <Text style={s.label}>Select Seat *</Text>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 16, marginBottom: 10, justifyContent: 'center' }}>
+              {[['#378ADD','Available'],['#E24B4A','Booked'],['#3DB34A','Selected']].map(([color, label]) => (
+                <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: color }} />
+                  <Text style={{ fontSize: 11, color: '#555' }}>{label}</Text>
                 </View>
-              )}
-
-              {/* Seat map */}
-              {selectedTrip && (
-                <>
-                  <Text style={[s.label, { marginTop: 14 }]}>Select Seat *</Text>
-                  <>
-                      <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, marginBottom: 10, gap: 6 }}>
-                        {[{ label: 'Available', color: '#378ADD' }, { label: 'Booked', color: '#E24B4A' }, { label: 'Selected', color: '#3DB34A' }].map(l => (
-                          <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' }}>
-                            <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: l.color }} />
-                            <Text style={{ fontSize: 12, color: '#333331' }}>{l.label}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 10, alignItems: 'center' }}>
-                        <View style={{ backgroundColor: '#F7F7F5', borderRadius: 6, padding: 6, alignItems: 'center', marginBottom: 8, width: '100%' }}>
-                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#ADADAA', letterSpacing: 0.8 }}>DRIVER CABIN</Text>
-                        </View>
-                        {[...new Set(seats.map(s => s.seat_row))].sort((a, b) => a - b).map(row => {
-                          const rowSeats = seats.filter(s => s.seat_row === row);
-                          const left  = rowSeats.filter(s => ['A', 'B'].includes(s.seat_col));
-                          const right = rowSeats.filter(s => ['C', 'D', 'E'].includes(s.seat_col));
-                          return (
-                            <View key={row} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, justifyContent: 'center' }}>
-                              <Text style={{ fontSize: 10, color: '#DDDDD9', width: 20, textAlign: 'right' }}>{row}</Text>
-                              {left.map(seat => {
-                                const isBooked   = seat.status === 'booked' || seat.status === 'locked';
-                                const isSelected = selectedSeat === seat.seat_number;
-                                return (
-                                  <TouchableOpacity key={seat.seat_number} disabled={isBooked}
-                                    onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
-                                    style={{ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-                                      backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD' }}>
-                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{seat.seat_number}</Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                              <View style={{ width: 16 }} />
-                              {right.map(seat => {
-                                const isBooked   = seat.status === 'booked' || seat.status === 'locked';
-                                const isSelected = selectedSeat === seat.seat_number;
-                                return (
-                                  <TouchableOpacity key={seat.seat_number} disabled={isBooked}
-                                    onPress={() => { setSelectedSeat(seat.seat_number); setErrors(e => ({ ...e, seat: null })); }}
-                                    style={{ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-                                      backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD' }}>
-                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{seat.seat_number}</Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </View>
-                          );
-                        })}
-                        {seats.length === 0 && <Text style={{ fontSize: 12, color: '#ADADAA', padding: 20 }}>No seat data</Text>}
-                      </View>
-                  </>
-                  {errors.seat && <Text style={s.errorText}>{errors.seat}</Text>}
-                </>
-              )}
-
-              {/* Payment */}
-              <Text style={[s.label, { marginTop: 14 }]}>Payment Method</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
-                {PAY_OPTIONS.map(p => (
-                  <TouchableOpacity key={p.key} style={[s.payBtn, payMethod === p.key && s.payBtnActive]}
-                    onPress={() => setPayMethod(p.key)} activeOpacity={0.8}>
-                    <Text style={{ fontSize: 16 }}>{p.icon}</Text>
-                    <Text style={[s.payLabel, payMethod === p.key && { color: '#fff' }]}>{p.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Summary */}
-              {selectedTrip && selectedSeat && (
-                <View style={s.summary}>
-                  <Text style={s.summaryTitle}>Booking Summary</Text>
-                  {[['Passenger', name || '—'], ['Phone', phone || '—'], ['Seat', selectedSeat],
-                    ['Departure', `${selectedTrip.label} ${selectedTrip.time}`],
-                    ['Route', `${selectedTrip.from} → ${selectedTrip.to}`],
-                    ['Fare', `FCFA ${selectedTrip.fare?.toLocaleString()}`],
-                    ['Payment', PAY_OPTIONS.find(p => p.key === payMethod)?.label]
-                  ].map(([k, v]) => (
-                    <View key={k} style={s.summaryRow}>
-                      <Text style={s.summaryKey}>{k}</Text>
-                      <Text style={s.summaryVal}>{v}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={{ height: 20 }} />
-            </ScrollView>
-
-            {/* Footer */}
-            <View style={s.footer}>
-              <TouchableOpacity style={[s.btn, submitting && s.btnDisabled]} onPress={submit} disabled={submitting} activeOpacity={0.85}>
-                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Issue Ticket →</Text>}
-              </TouchableOpacity>
+              ))}
             </View>
+            <Text style={{ fontSize: 10, fontWeight: '600', color: '#ADADAA', textAlign: 'center', marginBottom: 8 }}>DRIVER CABIN</Text>
+            {rows.map(row => (
+              <View key={row} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ width: 20, fontSize: 11, color: '#ADADAA' }}>{row}</Text>
+                {seats.filter(seat => seat.seat_row === row).map(seat => {
+                  const isBooked   = seat.status === 'booked' || seat.status === 'locked';
+                  const isSelected = selectedSeat?.seat_number === seat.seat_number;
+                  return (
+                    <TouchableOpacity
+                      key={seat.seat_number}
+                      disabled={isBooked}
+                      onPress={() => setSelectedSeat(seat)}
+                      style={{ width: 36, height: 36, borderRadius: 6, margin: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: isBooked ? '#E24B4A' : isSelected ? '#3DB34A' : '#378ADD' }}
+                    >
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{seat.seat_number}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
           </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </>
+      )}
+
+      {/* Payment */}
+      <Text style={s.label}>Payment Method</Text>
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+        {[['cash','💵 Cash'],['momo','📱 MTN MoMo'],['orange','🟠 Orange Money']].map(([val, label]) => (
+          <TouchableOpacity key={val} onPress={() => setPayment(val)}
+            style={{ flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: payment === val ? '#3DB34A' : '#fff', borderWidth: 1, borderColor: payment === val ? '#3DB34A' : '#EFEFED' }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: payment === val ? '#fff' : '#555' }}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={[s.btn, { opacity: (!name || !phone || !from || !to || !selectedTrip || !selectedSeat || issuing) ? 0.5 : 1 }]}
+        onPress={issueTicket}
+        disabled={!name || !phone || !from || !to || !selectedTrip || !selectedSeat || issuing}
+      >
+        {issuing ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Issue Ticket →</Text>}
+      </TouchableOpacity>
+
+      {/* From Picker Modal */}
+      <Modal visible={showFromPicker} transparent animationType="slide">
+        <View style={s.modal}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Select Origin</Text>
+            <FlatList data={TERMINALS.filter(t => t.code !== to?.code)} keyExtractor={t => t.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={s.modalItem} onPress={() => { setFrom(item); setShowFromPicker(false); }}>
+                  <Text style={{ fontSize: 15, color: '#111110' }}>{item.name}</Text>
+                </TouchableOpacity>
+              )} />
+            <TouchableOpacity onPress={() => setShowFromPicker(false)} style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#3DB34A', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* To Picker Modal */}
+      <Modal visible={showToPicker} transparent animationType="slide">
+        <View style={s.modal}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Select Destination</Text>
+            <FlatList data={TERMINALS.filter(t => t.code !== from?.code)} keyExtractor={t => t.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={s.modalItem} onPress={() => { setTo(item); setShowToPicker(false); }}>
+                  <Text style={{ fontSize: 15, color: '#111110' }}>{item.name}</Text>
+                </TouchableOpacity>
+              )} />
+            <TouchableOpacity onPress={() => setShowToPicker(false)} style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#3DB34A', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Trip Picker Modal */}
+      <Modal visible={showTripPicker} transparent animationType="slide">
+        <View style={s.modal}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Select Departure</Text>
+            <FlatList data={trips} keyExtractor={t => t.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={s.modalItem} onPress={() => { setSelectedTrip(item); setShowTripPicker(false); }}>
+                  <Text style={{ fontSize: 15, color: '#111110', fontWeight: '600' }}>{item.depart_time?.slice(0,5)} → {item.arrive_time?.slice(0,5)}</Text>
+                  <Text style={{ fontSize: 12, color: '#737370', marginTop: 2 }}>{item.bus_code} · {item.available_seats} seats available</Text>
+                </TouchableOpacity>
+              )} />
+            <TouchableOpacity onPress={() => setShowTripPicker(false)} style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#3DB34A', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  shell:              { flex: 1, backgroundColor: '#F7F7F5' },
-  header:             { backgroundColor: '#fff', padding: 14, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFED', flexDirection: 'row', alignItems: 'flex-start' },
-  backText:           { fontSize: 14, color: '#3DB34A', fontWeight: '500', marginBottom: 6 },
-  title:              { fontSize: 17, fontWeight: '600', color: '#111110' },
-  body:               { flex: 1, padding: 14 },
-  label:              { fontSize: 12, fontWeight: '600', color: '#737370', marginBottom: 6, letterSpacing: 0.4 },
-  input:              { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', paddingHorizontal: 14, height: 46, justifyContent: 'center' },
-  inputText:          { fontSize: 14, color: '#111110' },
-  inputError:         { borderColor: '#E24B4A' },
-  errorText:          { fontSize: 11, color: '#E24B4A', marginTop: 4 },
-  dropdownBtn:        { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', paddingHorizontal: 14, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownVal:        { fontSize: 14, color: '#111110', flex: 1 },
-  dropdownPlaceholder:{ fontSize: 14, color: '#ADADAA', flex: 1 },
-  pickerSheet:        { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', marginTop: 6, overflow: 'hidden' },
-  pickerHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
-  pickerTitle:        { fontSize: 14, fontWeight: '600', color: '#111110' },
-  pickerItem:         { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' },
-  pickerItemLabel:    { fontSize: 14, fontWeight: '600', color: '#111110' },
-  payBtn:             { flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', padding: 10, alignItems: 'center', gap: 4 },
-  payBtnActive:       { backgroundColor: '#3DB34A', borderColor: '#3DB34A' },
-  payLabel:           { fontSize: 11, fontWeight: '600', color: '#737370' },
-  summary:            { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EFEFED', padding: 14, marginTop: 14 },
-  summaryTitle:       { fontSize: 13, fontWeight: '700', color: '#111110', marginBottom: 10 },
-  summaryRow:         { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F7F7F5' },
-  summaryKey:         { fontSize: 12, color: '#737370' },
-  summaryVal:         { fontSize: 12, fontWeight: '600', color: '#111110' },
-  footer:             { padding: 14, paddingBottom: 24, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#EFEFED' },
-  btn:                { backgroundColor: '#3DB34A', borderRadius: 14, padding: 15, alignItems: 'center' },
-  btnDisabled:        { backgroundColor: '#9fd4a5' },
-  btnText:            { color: '#fff', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
+  container: { flex: 1, backgroundColor: '#F7F7F6', padding: 20 },
+  title: { fontSize: 24, fontWeight: '700', color: '#111110', marginBottom: 24, marginTop: 8 },
+  label: { fontSize: 12, fontWeight: '600', color: '#737370', marginBottom: 6, marginTop: 12 },
+  input: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', padding: 14, fontSize: 15, color: '#111110' },
+  picker: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFED', padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  btn: { backgroundColor: '#3DB34A', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 40 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111110', padding: 20, borderBottomWidth: 1, borderBottomColor: '#EFEFED' },
+  modalItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F7F7F6' },
 });
