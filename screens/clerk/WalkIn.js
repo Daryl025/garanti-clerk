@@ -53,7 +53,7 @@ export default function WalkIn() {
   async function pickTrip(t) {
     setTrip(t); setShowTrip(false); setSeats([]); setSeat(null);
     try {
-      const tk = await AsyncStorage.getItem('token');
+      const tk = await AsyncStorage.getItem('clerk_token');
       const r = await axios.get(BASE + '/api/trips/' + t.id + '/seats/manifest', {
         headers: { Authorization: 'Bearer ' + tk }
       });
@@ -65,7 +65,7 @@ export default function WalkIn() {
     if (!name || !phone || !trip || !seat || issuing) return;
     setIssuing(true);
     try {
-      const tk = await AsyncStorage.getItem('token');
+      const tk = await AsyncStorage.getItem('clerk_token');
       const r = await axios.post(BASE + '/api/tickets/book', {
         trip_id: trip.id,
         seat_numbers: [seat.seat_number],
