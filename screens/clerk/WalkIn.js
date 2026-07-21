@@ -58,7 +58,7 @@ export default function WalkIn() {
         headers: { Authorization: 'Bearer ' + tk }
       });
       setSeats(r.data.seats || []);
-    } catch(e) { console.log('seats err', e.message); }
+    } catch(e) { alert('Seat error: ' + e.message); }
   }
 
   async function issueTicket() {
