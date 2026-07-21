@@ -31,7 +31,8 @@ export default function WalkIn({ navigation }) {
   const [idNo, setIdNo]           = useState('');
   const [from, setFrom]           = useState(null);
   const [to, setTo]               = useState(null);
-  const today = new Date(); const [date, setDate] = useState(formatDate(today));
+  const [date, setDate] = useState(formatDate(new Date()));
+  const [dateObj, setDateObj] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker]     = useState(false);
@@ -154,11 +155,11 @@ export default function WalkIn({ navigation }) {
       </TouchableOpacity>
       {showDatePicker && (
         <DateTimePicker
-          value={date}
+          value={dateObj}
           mode="date"
           display="spinner"
           minimumDate={new Date()}
-          onChange={(event, d) => { setShowDatePicker(false); if (d) setDate(formatDate(d)); }}
+          onChange={(event, d) => { setShowDatePicker(false); if (d) { setDateObj(d); setDate(formatDate(d)); } }}
         />
       )}
 
